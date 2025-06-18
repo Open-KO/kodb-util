@@ -10,6 +10,7 @@ import (
 
 type KodbConfig struct {
 	DatabaseConfig DatabaseConfig `yaml:"databaseConfig"`
+	SchemaConfig   SchemaConfig   `yaml:"schemaConfig"`
 }
 
 type DatabaseConfig struct {
@@ -21,14 +22,18 @@ type DatabaseConfig struct {
 	DbName   string `yaml:"dbname"`
 }
 
+type SchemaConfig struct {
+	Dir string `yaml:"dir"`
+}
+
 const (
-	configFileName = "config.yaml"
+	DefaultConfigFileName = "kodb-util-config.yaml"
 )
 
 var (
-	// folder should be overridable via command line arg
+	// Override config file passed via CLI argument
 	// this path is relative to the working directory; not this source file
-	ConfigPath = filepath.Clean("./config/")
+	ConfigPath = ""
 
 	// private - will act as a singleton
 	config *KodbConfig
@@ -46,13 +51,14 @@ func GetConfig() *KodbConfig {
 
 func loadConfig() {
 	// Failing to load config is one of the few areas where we'll do a panic instead of error handling
-	configPath := filepath.Join(ConfigPath, configFileName)
-	absPath, pErr := filepath.Abs(configPath)
+	if ConfigPath == "" {
+		ConfigPath = DefaultConfigFileName
+	}
+	absPath, pErr := filepath.Abs(ConfigPath)
 	if pErr != nil {
-		log.Panic(fmt.Errorf("failed to parse path for config.yaml: %v", pErr))
+		log.Panic(fmt.Errorf("failed to parse path for config: %v", pErr))
 	}
 
-	fmt.Printf("Attempting to load configuration: %s", absPath)
 	yamlFile, err := os.ReadFile(absPath)
 	if err != nil {
 		log.Panic(fmt.Errorf("failed to read config.yaml: %v", err))
@@ -63,5 +69,4 @@ func loadConfig() {
 		log.Panic(fmt.Errorf("failed to parse config.yaml: %v", err))
 	}
 
-	fmt.Printf("Successfully loaded configuration")
 }

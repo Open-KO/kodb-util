@@ -10,14 +10,22 @@ import (
 	"log"
 )
 
+const (
+	defaultOpenKoDbDir = "../OpenKO-db"
+)
+
 type Args struct {
 	Clean  bool
 	Import bool
 	// TODO
 	//Export bool
+	ConfigPath string
+	DbUser     string
+	DbPass     string
+	SchemaDir  string
 }
 
-func (this Args) HasArgs() bool {
+func (this Args) HasActionableArgs() bool {
 	if this.Clean || this.Import {
 		return true
 	}
@@ -25,24 +33,45 @@ func (this Args) HasArgs() bool {
 }
 
 func getArgs() (a Args) {
-	clean := flag.Bool("clean", false, "Clean drops the databaseConfig.dbname database and removes the knight user")
-	importDb := flag.Bool("import", false, "Runs clean and imports OpenKO-db files")
+	_clean := flag.Bool("clean", false, "Clean drops the databaseConfig.dbname database and removes the knight user")
+	_import := flag.Bool("import", false, "Runs clean and imports OpenKO-db files")
 	//exportDb := flag.Bool("export", false, "Export the KN_online database to OpenKO-db files")
+	configPath := flag.String("config", config.DefaultConfigFileName, "Path to config file")
+	dbUser := flag.String("dbuser", "", "Database user override")
+	dbPass := flag.String("dbpass", "", "Database password override")
+	schemaDir := flag.String("schema", "", "OpenKO-db schema directory override")
 
 	flag.Parse()
 
-	if clean != nil {
-		a.Clean = *clean
+	if _clean != nil {
+		a.Clean = *_clean
 	}
 
-	if importDb != nil {
-		a.Import = *importDb
+	if _import != nil {
+		a.Import = *_import
 	}
 
 	// TODO
 	//if exportDb != nil {
 	//	a.Export = *exportDb
 	//}
+
+	if configPath != nil {
+		a.ConfigPath = *configPath
+		config.ConfigPath = *configPath
+	}
+
+	if dbUser != nil {
+		a.DbUser = *dbUser
+	}
+
+	if dbPass != nil {
+		a.DbPass = *dbPass
+	}
+
+	if schemaDir != nil {
+		a.SchemaDir = *schemaDir
+	}
 
 	return a
 }
@@ -60,7 +89,7 @@ func main() {
 	fmt.Println("|---------------------------|")
 
 	args := getArgs()
-	if !args.HasArgs() {
+	if !args.HasActionableArgs() {
 		fmt.Println("No arguments provided:")
 		flag.Usage()
 		return
@@ -69,8 +98,22 @@ func main() {
 	// loading config for the first time can throw a panic, so let's do it here
 	// uses a singleton pattern, so once loaded from disk it's in memory
 	fmt.Print("Loading config...")
-	_ = config.GetConfig()
+	conf := config.GetConfig()
+	// apply any command-line overrides
+	if args.DbUser != "" {
+		conf.DatabaseConfig.User = args.DbUser
+	}
+	if args.DbPass != "" {
+		conf.DatabaseConfig.Password = args.DbPass
+	}
+	if args.SchemaDir != "" {
+		conf.SchemaConfig.Dir = args.SchemaDir
+	}
 	fmt.Println(" done")
+
+	if conf.DatabaseConfig.User == "" {
+		fmt.Println("No database user specified. Windows Authentication will be attempted")
+	}
 
 	// Create a stub context for use with our db-ops.  We're not doing anything fancy with it now, but it will give us a
 	// few options if we ever desire them (deadlines, cancel funcs, key:val mapping)

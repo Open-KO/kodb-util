@@ -5,5 +5,9 @@ databaseConfig:
   instance: SQLEXPRESS
   dbname: OpenKO
   port: 1433
-  user: sa
+  user: YourUser (Leave Blank for Windows Auth)
   password: YourPassword
+
+# schema-based configuration, mainly to configure the path to your OpenKO-db project directory
+schemaConfig:
+  dir: ../OpenKO-db
