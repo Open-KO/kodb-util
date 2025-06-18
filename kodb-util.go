@@ -90,7 +90,7 @@ func main() {
 
 	args := getArgs()
 	if !args.HasActionableArgs() {
-		fmt.Println("No arguments provided:")
+		fmt.Println("No actionable arguments provided:")
 		flag.Usage()
 		return
 	}

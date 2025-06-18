@@ -26,7 +26,6 @@ const (
 	// 2: Instance
 	// 3: Database
 	winAuthConnStrFmt = "sqlserver://@%[1]s:%[2]d/%[3]s?database=%[4]s"
-	//winAuthConnStrFmt = "server=%[1]s:1433\\\\%[2]s;user id=;database=%[3]s"
 
 	DefaultSysDbName = "master"
 )
