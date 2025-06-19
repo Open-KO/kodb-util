@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,11 +19,23 @@ type DatabaseConfig struct {
 	Instance string `yaml:"instance"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
-	DbName   string `yaml:"dbname"`
 }
 
 type SchemaConfig struct {
-	Dir string `yaml:"dir"`
+	Dir    string       `yaml:"dir"`
+	GameDb GenDbConfig  `yaml:"gameDb"`
+	Users  []UserConfig `yaml:"users"`
+}
+
+type GenDbConfig struct {
+	Name    string   `yaml:"name"`
+	Schemas []string `yaml:"schemas"`
+	Logins  []string `yaml:"logins"`
+}
+
+type UserConfig struct {
+	Name   string `yaml:"name"`
+	Schema string `yaml:"schema"`
 }
 
 const (

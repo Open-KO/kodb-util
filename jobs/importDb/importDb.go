@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/mssql"
 	"log"
@@ -12,17 +13,8 @@ import (
 	"strings"
 )
 
-const (
-	DatabasesDir   = "Databases"
-	LoginsDir      = "Logins"
-	UsersDir       = "Users"
-	SchemasDir     = "Schemas"
-	TablesDir      = "Tables"
-	ViewsDir       = "Views"
-	StoredProcsDir = "StoredProcedures"
-
-	sqlExtPattern   = "*.sql"
-	batchTerminator = "\nGO"
+var (
+	CreateManualArtifacts = false
 )
 
 type ScriptArgs struct {
@@ -50,7 +42,7 @@ func ImportDb(ctx context.Context) (err error) {
 		return err
 	}
 
-	err = importLogins(ctx)
+	err = importSchemas(ctx)
 	if err != nil {
 		return err
 	}
@@ -60,7 +52,7 @@ func ImportDb(ctx context.Context) (err error) {
 		return err
 	}
 
-	err = importSchemas(ctx)
+	err = importLogins(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,9 +77,9 @@ func ImportDb(ctx context.Context) (err error) {
 
 // runScripts runs a related group of sql files.  Each file is broken down into batches (separated by the "GO" keyword)
 // and then executed/commited within a transaction fence.
-func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) (err error) {
-	fmt.Println(fmt.Sprintf("Found %d scripts", len(fileNames)))
-	if len(fileNames) == 0 {
+func runScripts(ctx context.Context, scriptArgs ScriptArgs, sqlScripts ...string) (err error) {
+	if len(sqlScripts) == 0 {
+		fmt.Println("WARN: No scripts to execute")
 		return nil
 	}
 
@@ -120,15 +112,8 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 		return err
 	}
 
-	for i := range fileNames {
-		fmt.Println(fmt.Sprintf("Reading %s", fileNames[i]))
-		sqlBytes, err := os.ReadFile(fileNames[i])
-		if err != nil {
-			return err
-		}
-
-		sqlStr := string(sqlBytes)
-		batches := splitBatches(sqlStr)
+	for i := range sqlScripts {
+		batches := splitBatches(sqlScripts[i])
 
 		fmt.Println(fmt.Sprintf("file contains %d batches", len(batches)))
 		if len(batches) == 0 {
@@ -174,73 +159,117 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 
 func importDbs(ctx context.Context) (err error) {
 	fmt.Println("-- Importing databases --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, DatabasesDir))
+	sArgs := defaultScriptArgs()
+	sArgs.isUseDefaultSystemDb = true
+
+	script, err := artifacts.GetCreateDatabaseScript(config.GetConfig().SchemaConfig.GameDb.Name)
 	if err != nil {
 		return err
 	}
 
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
-}
-
-func importLogins(ctx context.Context) (err error) {
-	fmt.Println("-- Importing Logins --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, LoginsDir))
-	if err != nil {
-		return err
+	if CreateManualArtifacts {
+		err = artifacts.ExportDatabaseArtifact(config.GetConfig().SchemaConfig.GameDb.Name, script)
+		if err != nil {
+			return err
+		}
 	}
 
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
-}
-
-func importUsers(ctx context.Context) (err error) {
-	fmt.Println("-- Importing Users --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, UsersDir))
-	if err != nil {
-		return err
-	}
-
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
+	return runScripts(ctx, sArgs, script)
 }
 
 func importSchemas(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Schemas --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, SchemasDir))
-	if err != nil {
-		return err
+	sArgs := defaultScriptArgs()
+	scripts := []string{}
+	for _, schemaName := range config.GetConfig().SchemaConfig.GameDb.Schemas {
+		script, err := artifacts.GetCreateSchemaScript(schemaName, config.GetConfig().SchemaConfig.GameDb.Name)
+		if err != nil {
+			return err
+		}
+
+		if CreateManualArtifacts {
+			err = artifacts.ExportSchemaArtifact(schemaName, config.GetConfig().SchemaConfig.GameDb.Name, script)
+			if err != nil {
+				return err
+			}
+		}
+
+		scripts = append(scripts, script)
 	}
 
-	return runScripts(ctx, scripts, defaultScriptArgs())
+	return runScripts(ctx, sArgs, scripts...)
+}
+
+func importUsers(ctx context.Context) (err error) {
+	fmt.Println("-- Importing Users --")
+	sArgs := defaultScriptArgs()
+	scripts := []string{}
+	for _, user := range config.GetConfig().SchemaConfig.Users {
+		script, err := artifacts.GetCreateUserScript(user.Name, user.Schema)
+		if err != nil {
+			return err
+		}
+
+		if CreateManualArtifacts {
+			err = artifacts.ExportUserArtifact(user.Name, script)
+			if err != nil {
+				return err
+			}
+		}
+
+		scripts = append(scripts, script)
+	}
+
+	return runScripts(ctx, sArgs, scripts...)
+}
+
+func importLogins(ctx context.Context) (err error) {
+	fmt.Println("-- Importing Logins --")
+	sArgs := defaultScriptArgs()
+	sArgs.isUseDefaultSystemDb = true
+	scripts := []string{}
+	for _, loginName := range config.GetConfig().SchemaConfig.GameDb.Logins {
+		script, err := artifacts.GetCreateLoginScript(loginName, config.GetConfig().SchemaConfig.GameDb.Name)
+		if err != nil {
+			return err
+		}
+
+		if CreateManualArtifacts {
+			err = artifacts.ExportLoginArtifact(loginName, script)
+			if err != nil {
+				return err
+			}
+		}
+
+		scripts = append(scripts, script)
+	}
+
+	return runScripts(ctx, sArgs, scripts...)
 }
 
 func importTables(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Tables --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, TablesDir))
+	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().SchemaConfig.Dir, artifacts.TablesDir))
 	if err != nil {
 		return err
 	}
 
-	return runScripts(ctx, scripts, defaultScriptArgs())
+	return runScripts(ctx, defaultScriptArgs(), scripts...)
 }
 
 func importViews(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Views --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, ViewsDir))
+	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().SchemaConfig.Dir, artifacts.ViewsDir))
 	if err != nil {
 		return err
 	}
 
-	return runScripts(ctx, scripts, defaultScriptArgs())
+	return runScripts(ctx, defaultScriptArgs(), scripts...)
 }
 
 func importStoredProcs(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Stored Procedures --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, StoredProcsDir))
+	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().SchemaConfig.Dir, artifacts.StoredProcsDir))
 	if err != nil {
 		return err
 	}
@@ -256,22 +285,37 @@ func importStoredProcs(ctx context.Context) (err error) {
 	// When using a transaction, take care not to call the non-transaction sql.DB methods directly, too, as those will execute
 	// outside the transaction, giving your code an inconsistent view of the state of the database or even causing deadlocks.
 	sArgs.isNoTx = true
-	return runScripts(ctx, scripts, sArgs)
+	return runScripts(ctx, sArgs, scripts...)
 }
 
-// getSqlFileNames returns the list of *.sql files from a given directory
-func getSqlFileNames(dir string) (fileNames []string, err error) {
+// getSqlScripts returns the list of *.sql files from a given directory loaded into an array of strings
+func getSqlScripts(dir string) (sqlScripts []string, err error) {
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("directory %s does not exist", dir)
 	}
-	return filepath.Glob(filepath.Join(dir, sqlExtPattern))
+	fileNames, err := filepath.Glob(filepath.Join(dir, artifacts.SqlExtPattern))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range fileNames {
+		fmt.Println(fmt.Sprintf("Reading %s", fileNames[i]))
+		sqlBytes, err := os.ReadFile(fileNames[i])
+		if err != nil {
+			return nil, err
+		}
+
+		sqlScripts = append(sqlScripts, string(sqlBytes))
+	}
+
+	return sqlScripts, nil
 }
 
 // splitBatches breaks an MSSQL .sql dump file into batch groups.  MSSQL dump files use "GO" statements to separate
 // batches.  The GO statement is not standard SQL and is only supported inside of MS SQL Management Studio, so we
 // need to parse around it.
 func splitBatches(sql string) (batches []string) {
-	batches = strings.Split(sql, batchTerminator)
+	batches = strings.Split(sql, artifacts.BatchTerminator)
 	for i := range batches {
 		batches[i] = strings.TrimSpace(batches[i])
 		if batches[i] == "" {
