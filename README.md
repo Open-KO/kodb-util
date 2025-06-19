@@ -7,10 +7,17 @@ The utility aims to:
 2. TODO: Update the files in the OpenKO-db project via extract functions.
 
 ## Program configuration
-Configure your database connection information in `config/config.yaml`; As this file is on gitignore, a template is provided in `config/config.yaml.template`
+Configure your database connection information in `kodb-util-config.yaml`; As this file is on gitignore, a template is provided in `kodb-util-config.yaml.template`
 
-This utility mutates the `knight` user as part of its import and export functionality.  For local development you 
-can use your `sa` login; otherwise you'll need to configure a user with similar permissions. 
+This utility mutates the `knight` user as part of its import and export functionality.  For local development you can:
+* Leave databaseConfig.user blank to use Windows Authentication
+* use your `sa` login
+* configure a user with similar permissions
+
+You'll need a copy of OpenKO-db to run this program against.  In your config file, set schemaConfig.dir to the directory 
+that contains this project. 
+
+(TODO:  Link OpenKO-db repo when opened under OpenKO org)
 
 ## Dependencies
 This utility is programmed with Go 1.24+.  You'll need to install the language and add it to your PATH. See https://go.dev/doc/install
@@ -43,8 +50,16 @@ No arguments provided:
 Usage of kodb-util.exe:
   -clean
         Clean drops the databaseConfig.dbname database and removes the knight user
+  -config string
+        Path to config file (default "kodb-util-config.yaml")
+  -dbpass string
+        Database password override
+  -dbuser string
+        Database user override
   -import
         Runs clean and imports OpenKO-db files
+  -schema string
+        OpenKO-db schema directory override
 ```
 
 ## Building the utility program

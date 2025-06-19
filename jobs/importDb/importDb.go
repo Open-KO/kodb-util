@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kodb-util/config"
 	"kodb-util/mssql"
 	"log"
 	"os"
@@ -12,13 +13,13 @@ import (
 )
 
 const (
-	DatabasesDir   = "../Databases"
-	LoginsDir      = "../Logins"
-	UsersDir       = "../Users"
-	SchemasDir     = "../Schemas"
-	TablesDir      = "../Tables"
-	ViewsDir       = "../Views"
-	StoredProcsDir = "../StoredProcedures"
+	DatabasesDir   = "Databases"
+	LoginsDir      = "Logins"
+	UsersDir       = "Users"
+	SchemasDir     = "Schemas"
+	TablesDir      = "Tables"
+	ViewsDir       = "Views"
+	StoredProcsDir = "StoredProcedures"
 
 	sqlExtPattern   = "*.sql"
 	batchTerminator = "\nGO"
@@ -127,7 +128,6 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 		}
 
 		sqlStr := string(sqlBytes)
-		fmt.Println(fmt.Sprintf("Running %s", fileNames[i]))
 		batches := splitBatches(sqlStr)
 
 		fmt.Println(fmt.Sprintf("file contains %d batches", len(batches)))
@@ -144,17 +144,19 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 			}
 		}
 
+		fmt.Print(fmt.Sprintf("Executing %d batches... ", len(batches)))
 		for j := range batches {
-			fmt.Println(fmt.Sprintf("Executing batch [%d/%d]", j+1, len(batches)))
 			_, err = conn.Exec(batches[j])
 			if err != nil {
 				if !isIgnoreErr(err) {
+					fmt.Printf("\nError executing batch [%d/%d]: %v\n", j+1, len(batches), err)
 					return err
 				} else {
 					err = nil
 				}
 			}
 		}
+		fmt.Println(" Done")
 
 		// transaction fence handling, when used
 		if tx != nil {
@@ -165,8 +167,6 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 			}
 			tx = nil
 		}
-
-		fmt.Println(" Done")
 	}
 
 	return nil
@@ -174,7 +174,7 @@ func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) 
 
 func importDbs(ctx context.Context) (err error) {
 	fmt.Println("-- Importing databases --")
-	scripts, err := getSqlFileNames(DatabasesDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, DatabasesDir))
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func importDbs(ctx context.Context) (err error) {
 
 func importLogins(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Logins --")
-	scripts, err := getSqlFileNames(LoginsDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, LoginsDir))
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func importLogins(ctx context.Context) (err error) {
 
 func importUsers(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Users --")
-	scripts, err := getSqlFileNames(UsersDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, UsersDir))
 	if err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func importUsers(ctx context.Context) (err error) {
 
 func importSchemas(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Schemas --")
-	scripts, err := getSqlFileNames(SchemasDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, SchemasDir))
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func importSchemas(ctx context.Context) (err error) {
 
 func importTables(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Tables --")
-	scripts, err := getSqlFileNames(TablesDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, TablesDir))
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func importTables(ctx context.Context) (err error) {
 
 func importViews(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Views --")
-	scripts, err := getSqlFileNames(ViewsDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, ViewsDir))
 	if err != nil {
 		return err
 	}
@@ -240,7 +240,7 @@ func importViews(ctx context.Context) (err error) {
 
 func importStoredProcs(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Stored Procedures --")
-	scripts, err := getSqlFileNames(StoredProcsDir)
+	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, StoredProcsDir))
 	if err != nil {
 		return err
 	}
@@ -261,6 +261,9 @@ func importStoredProcs(ctx context.Context) (err error) {
 
 // getSqlFileNames returns the list of *.sql files from a given directory
 func getSqlFileNames(dir string) (fileNames []string, err error) {
+	if _, err = os.Stat(dir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("directory %s does not exist", dir)
+	}
 	return filepath.Glob(filepath.Join(dir, sqlExtPattern))
 }
 

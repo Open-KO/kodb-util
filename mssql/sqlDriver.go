@@ -18,7 +18,14 @@ const (
 	// 3: Host
 	// 4: Port
 	// 5: Instance Name
-	connStringFmt = "sqlserver://%[1]s:%[2]s@%[3]s:%[4]d/%[5]s"
+	// 6: Database Name
+	connStringFmt = "sqlserver://%[1]s:%[2]s@%[3]s:%[4]d/%[5]s?database=%[6]s"
+
+	// 1: Host
+	// 2: Port
+	// 2: Instance
+	// 3: Database
+	winAuthConnStrFmt = "sqlserver://@%[1]s:%[2]d/%[3]s?database=%[4]s"
 
 	DefaultSysDbName = "master"
 )
@@ -35,10 +42,15 @@ func NewMssqlDbDriver() *MssqlDbDriver {
 	}
 }
 
-func (this *MssqlDbDriver) GetConnectionString() string {
-	if len(this.connString) == 0 {
-		this.connString = fmt.Sprintf(connStringFmt, this.dbConfig.User, url.QueryEscape(this.dbConfig.Password), this.dbConfig.Host, this.dbConfig.Port, this.dbConfig.Instance)
+func (this *MssqlDbDriver) GetConnectionString(dbName string) string {
+	if this.dbConfig.User == "" {
+		// Attempt Windows Auth
+		this.connString = fmt.Sprintf(winAuthConnStrFmt, this.dbConfig.Host, this.dbConfig.Port, this.dbConfig.Instance, dbName)
+	} else {
+		// Used Mixed Auth
+		this.connString = fmt.Sprintf(connStringFmt, this.dbConfig.User, url.QueryEscape(this.dbConfig.Password), this.dbConfig.Host, this.dbConfig.Port, this.dbConfig.Instance, dbName)
 	}
+
 	return this.connString
 }
 
@@ -54,10 +66,8 @@ func (this *MssqlDbDriver) GetConnectionToDbName(dbName string) (*sql.DB, error)
 
 	// otherwise, open a new connection
 	fmt.Println("Opening connection to mssql")
-	connString := this.GetConnectionString()
-	connString += fmt.Sprintf("?database=%s", dbName)
 	var err error
-	this.conn, err = sql.Open(driverName, connString)
+	this.conn, err = sql.Open(driverName, this.GetConnectionString(dbName))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to open connection to mssql: %v", err)
 	}
