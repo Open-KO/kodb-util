@@ -13,9 +13,6 @@ import (
 
 const (
 	TemplatesDir   = "Templates"
-	LoginsDir      = "Logins"
-	UsersDir       = "Users"
-	SchemasDir     = "Schemas"
 	TablesDir      = "Tables"
 	ViewsDir       = "Views"
 	StoredProcsDir = "StoredProcedures"
@@ -30,6 +27,7 @@ const (
 	ExportSchemaFileNameFmt   = "2_CreateSchema_%s.sql"
 	ExportUserFileNameFmt     = "3_CreateUser_%s.sql"
 	ExportLoginFileNameFmt    = "4_CreateLogin_%s.sql"
+	ExportTableFileNameFmt    = "5_CreateTable_%s.sql"
 
 	SqlExtPattern   = "*.sql"
 	BatchTerminator = "\nGO"
@@ -55,6 +53,11 @@ func ExportUserArtifact(name string, sqlScript string) (err error) {
 // ExportLoginArtifact writes the generated sql used to create a login in the last import to OpenKO-db/ManualSetup
 func ExportLoginArtifact(name string, sqlScript string) (err error) {
 	return exportManualSetupArtifact(name, sqlScript, ExportLoginFileNameFmt)
+}
+
+// ExportTableArtifact writes the gorm-generated sql used to create a table in the last import to OpenKO-db/ManualSetup
+func ExportTableArtifact(name string, sqlScript string) (err error) {
+	return exportManualSetupArtifact(name, sqlScript, ExportTableFileNameFmt)
 }
 
 func exportManualSetupArtifact(name string, sqlScript string, fileNameFmt string) (err error) {

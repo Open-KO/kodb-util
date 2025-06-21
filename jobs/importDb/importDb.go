@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/kenner2/openko-gorm/kogen"
 	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/mssql"
@@ -57,20 +58,34 @@ func ImportDb(ctx context.Context) (err error) {
 		return err
 	}
 
+	// GORM prototyping
+	//driver := mssql.NewMssqlDbDriver()
+	//gConf := &gorm.Config{}
+	//var sqlCaptureMap map[string]int
+	//if CreateManualArtifacts {
+	//	sqlCaptureMap = make(map[string]int)
+	//	gConf.Logger = &utils.GormCaptureLogger{Interface: logger.Default, SqlLines: sqlCaptureMap}
+	//}
+	//dialector := sqlserver.Open(driver.GetConnectionString(config.GetConfig().SchemaConfig.GameDb.Name))
+	//db, err := gorm.Open(dialector, gConf)
+	//if err != nil {
+	//	return err
+	//}
+
 	err = importTables(ctx)
 	if err != nil {
 		return err
 	}
+	/*
+		err = importViews(ctx)
+		if err != nil {
+			return err
+		}
 
-	err = importViews(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = importStoredProcs(ctx)
-	if err != nil {
-		return err
-	}
+		err = importStoredProcs(ctx)
+		if err != nil {
+			return err
+		}*/
 
 	return nil
 }
@@ -249,9 +264,20 @@ func importLogins(ctx context.Context) (err error) {
 
 func importTables(ctx context.Context) (err error) {
 	fmt.Println("-- Importing Tables --")
-	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().SchemaConfig.Dir, artifacts.TablesDir))
+	/*scripts, err := getSqlScripts(filepath.Join(config.GetConfig().SchemaConfig.Dir, artifacts.TablesDir))
 	if err != nil {
 		return err
+	}*/
+	scripts := []string{}
+	for i := range kogen.ModelList {
+		createTableSql := kogen.ModelList[i].GetCreateTableString()
+		if CreateManualArtifacts {
+			err = artifacts.ExportTableArtifact(kogen.ModelList[i].GetTableName(), createTableSql)
+			if err != nil {
+				return err
+			}
+		}
+		scripts = append(scripts, createTableSql)
 	}
 
 	return runScripts(ctx, defaultScriptArgs(), scripts...)
