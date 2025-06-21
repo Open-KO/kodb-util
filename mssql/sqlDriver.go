@@ -31,14 +31,16 @@ const (
 )
 
 type MssqlDbDriver struct {
-	dbConfig   config.DatabaseConfig
-	connString string
-	conn       *sql.DB
+	dbConfig     config.DatabaseConfig
+	gameDbConfig config.GenDbConfig
+	connString   string
+	conn         *sql.DB
 }
 
 func NewMssqlDbDriver() *MssqlDbDriver {
 	return &MssqlDbDriver{
-		dbConfig: config.GetConfig().DatabaseConfig,
+		dbConfig:     config.GetConfig().DatabaseConfig,
+		gameDbConfig: config.GetConfig().SchemaConfig.GameDb,
 	}
 }
 
@@ -55,7 +57,7 @@ func (this *MssqlDbDriver) GetConnectionString(dbName string) string {
 }
 
 func (this *MssqlDbDriver) GetConnection() (*sql.DB, error) {
-	return this.GetConnectionToDbName(this.dbConfig.DbName)
+	return this.GetConnectionToDbName(this.gameDbConfig.Name)
 }
 
 func (this *MssqlDbDriver) GetConnectionToDbName(dbName string) (*sql.DB, error) {

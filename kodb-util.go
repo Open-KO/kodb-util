@@ -4,10 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/kenner2/openko-gorm/kogen"
+	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/jobs/clean"
 	"kodb-util/jobs/importDb"
 	"log"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -19,10 +23,11 @@ type Args struct {
 	Import bool
 	// TODO
 	//Export bool
-	ConfigPath string
-	DbUser     string
-	DbPass     string
-	SchemaDir  string
+	ConfigPath            string
+	DbUser                string
+	DbPass                string
+	SchemaDir             string
+	CreateManualArtifacts bool
 }
 
 func (this Args) HasActionableArgs() bool {
@@ -36,6 +41,7 @@ func getArgs() (a Args) {
 	_clean := flag.Bool("clean", false, "Clean drops the databaseConfig.dbname database and removes the knight user")
 	_import := flag.Bool("import", false, "Runs clean and imports OpenKO-db files")
 	//exportDb := flag.Bool("export", false, "Export the KN_online database to OpenKO-db files")
+	createManualArtifacts := flag.Bool("createManualArtifacts", false, "Export the artifacts generated from templates during the import process to OpenKO-db/ManualSetup.  Performs a clean on the ManualSetup directory first.")
 	configPath := flag.String("config", config.DefaultConfigFileName, "Path to config file")
 	dbUser := flag.String("dbuser", "", "Database user override")
 	dbPass := flag.String("dbpass", "", "Database password override")
@@ -49,6 +55,10 @@ func getArgs() (a Args) {
 
 	if _import != nil {
 		a.Import = *_import
+	}
+
+	if createManualArtifacts != nil {
+		a.CreateManualArtifacts = *createManualArtifacts
 	}
 
 	// TODO
@@ -109,6 +119,11 @@ func main() {
 	if args.SchemaDir != "" {
 		conf.SchemaConfig.Dir = args.SchemaDir
 	}
+
+	// Set GORM database names from config
+	// TODO:  When we make the change to multi-db, these params will need to be updated to support it
+	gameDbName := conf.SchemaConfig.GameDb.Name
+	kogen.SetDbNames(gameDbName, gameDbName, gameDbName)
 	fmt.Println(" done")
 
 	if conf.DatabaseConfig.User == "" {
@@ -129,6 +144,22 @@ func main() {
 	}
 
 	if args.Import {
+		if args.CreateManualArtifacts {
+			importDb.CreateManualArtifacts = true
+			fmt.Println("Import process will write template-generated artifacts to OpenKO-db/ManualSetup")
+			err := os.RemoveAll(filepath.Join(conf.SchemaConfig.Dir, artifacts.ManualSetupDir))
+			if err != nil {
+				fmt.Printf("failed to clean the ManualSetup directory: %w\n", err)
+				return
+			}
+			// ensure ManualSetup directory exists
+			err = os.MkdirAll(filepath.Join(conf.SchemaConfig.Dir, artifacts.ManualSetupDir), os.ModePerm)
+			if err != nil {
+				fmt.Printf("failed to create the ManualSetup directory: %w\n", err)
+				return
+			}
+		}
+
 		err := importDb.ImportDb(appCtx)
 		if err != nil {
 			panic(err)
