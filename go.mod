@@ -18,5 +18,3 @@ require (
 )
 
 replace gorm.io/gorm => github.com/kenner2/gorm v0.0.0-20250620020828-eafdc3784886
-
-replace github.com/kenner2/openko-gorm => ../openko-gorm
