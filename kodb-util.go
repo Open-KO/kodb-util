@@ -8,6 +8,7 @@ import (
 	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/jobs/clean"
+	"kodb-util/jobs/exportJsonSchema"
 	"kodb-util/jobs/importDb"
 	"log"
 	"os"
@@ -19,29 +20,41 @@ const (
 )
 
 type Args struct {
-	Clean  bool
-	Import bool
-	// TODO
-	//Export bool
+	Clean                 bool
+	Import                bool
+	Export                bool
 	ConfigPath            string
 	DbUser                string
 	DbPass                string
 	SchemaDir             string
 	CreateManualArtifacts bool
+	ExportJsonSchema      bool
 }
 
-func (this Args) HasActionableArgs() bool {
-	if this.Clean || this.Import {
-		return true
+// Validate ensures that the combination of arguments used is valid
+func (this Args) Validate() (err error) {
+	if !(this.Clean || this.Import || this.Export || this.ExportJsonSchema) {
+		flag.Usage()
+		return fmt.Errorf("no actionable arguments provided")
 	}
-	return false
+	if this.Clean && (this.Export || this.ExportJsonSchema) {
+		return fmt.Errorf("cannot perform both clean and export actions")
+	}
+	if this.Import && this.Export {
+		// maybe to test that nothing changes, but for general use would be an expensive no-op
+		// could do a separate arg/job for diff checking
+		return fmt.Errorf("running import and export together is redundant")
+	}
+
+	return nil
 }
 
 func getArgs() (a Args) {
 	_clean := flag.Bool("clean", false, "Clean drops the databaseConfig.dbname database and removes the knight user")
 	_import := flag.Bool("import", false, "Runs clean and imports OpenKO-db files")
-	//exportDb := flag.Bool("export", false, "Export the KN_online database to OpenKO-db files")
+	exportDb := flag.Bool("export", false, "Export the database to OpenKO-db files")
 	createManualArtifacts := flag.Bool("createManualArtifacts", false, "Export the artifacts generated from templates during the import process to OpenKO-db/ManualSetup.  Performs a clean on the ManualSetup directory first.")
+	exportJsonSchema := flag.Bool("exportJsonSchema", false, "Export table properties from the database to update jsonSchema")
 	configPath := flag.String("config", config.DefaultConfigFileName, "Path to config file")
 	dbUser := flag.String("dbuser", "", "Database user override")
 	dbPass := flag.String("dbpass", "", "Database password override")
@@ -61,10 +74,13 @@ func getArgs() (a Args) {
 		a.CreateManualArtifacts = *createManualArtifacts
 	}
 
-	// TODO
-	//if exportDb != nil {
-	//	a.Export = *exportDb
-	//}
+	if exportJsonSchema != nil {
+		a.ExportJsonSchema = *exportJsonSchema
+	}
+
+	if exportDb != nil {
+		a.Export = *exportDb
+	}
 
 	if configPath != nil {
 		a.ConfigPath = *configPath
@@ -99,9 +115,8 @@ func main() {
 	fmt.Println("|---------------------------|")
 
 	args := getArgs()
-	if !args.HasActionableArgs() {
-		fmt.Println("No actionable arguments provided:")
-		flag.Usage()
+	if err := args.Validate(); err != nil {
+		fmt.Printf("arguments error: %v, closing.", err)
 		return
 	}
 
@@ -161,6 +176,13 @@ func main() {
 		}
 
 		err := importDb.ImportDb(appCtx)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	if args.ExportJsonSchema {
+		err := exportJsonSchema.ExportJsonSchema()
 		if err != nil {
 			panic(err)
 		}

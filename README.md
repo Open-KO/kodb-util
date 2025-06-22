@@ -20,7 +20,22 @@ that contains this project.
 (TODO:  Link OpenKO-db repo when opened under OpenKO org)
 
 ## Dependencies
-This utility is programmed with Go 1.24+.  You'll need to install the language and add it to your PATH. See https://go.dev/doc/install
+The following commands assume that you have a terminal open in the root folder of the project.
+
+The `OpenKO-db` project is a submodule; We make use of its templates to generate DBs, Schemas, Users, and Logins.
+We can also export table properties from the database to update jsonSchema.
+
+To get the submodule for the first time:
+```shell
+git submodule update --init --recursive
+```
+
+To get updates after the submodule has been pulled for the first time:
+```shell
+git submodule update --recursive --remote
+```
+
+This utility is programmed with Go 1.24+.  You'll need to install the language if you want to build locally. See https://go.dev/doc/install
 
 If Go is correctly installed on your path, you should be able to run `go version` in your terminal and get version
 information output:
@@ -28,10 +43,7 @@ information output:
 PS C:\> go version
 go version go1.24.1 windows/amd64
 ```
-
-The following commands assume that you have a terminal open in the root folder of the project.
-
-To download project dependencies, run:
+To download Go dependencies, run:
 ```shell
 go mod download
 ```
@@ -52,10 +64,14 @@ Usage of kodb-util.exe:
         Clean drops the databaseConfig.dbname database and removes the knight user
   -config string
         Path to config file (default "kodb-util-config.yaml")
+  -createManualArtifacts
+        Export the artifacts generated from templates during the import process to OpenKO-db/ManualSetup.  Performs a clean on the ManualSetup directory first.
   -dbpass string
         Database password override
   -dbuser string
         Database user override
+  -exportJsonSchema
+        Export table properties from the database to update jsonSchema
   -import
         Runs clean and imports OpenKO-db files
   -schema string

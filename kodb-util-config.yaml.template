@@ -10,7 +10,10 @@ databaseConfig:
 # Database Generation configuration
 # Order of operations:  Create DBs (with schemas), Create Users (with schemas), Create Logins (to databases)
 schemaConfig:
-  dir: ../OpenKO-db
+# database project is setup as a git submodule
+# to get for the first time: git submodule update --init --recursive
+# to pull updates: git submodule update --recursive --remote
+  dir: ./OpenKO-db
   gameDb:
     name: OpenKO
     schemas:

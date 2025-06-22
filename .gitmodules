@@ -1,0 +1,4 @@
+[submodule "OpenKO-db"]
+	path = OpenKO-db
+	url = https://github.com/kenner2/OpenKO-db.git
+	branch = feature/templates
