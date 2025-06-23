@@ -77,13 +77,13 @@ func GetCreateDatabaseScript(dbName string) (script string, err error) {
 }
 
 // GetCreateLoginScript loads the CreateLogin template, substitutes variables, and returns the sql script as a string
-func GetCreateLoginScript(loginName string, dbName string) (script string, err error) {
+func GetCreateLoginScript(loginName string, dbName string, loginPass string) (script string, err error) {
 	sqlFmtBytes, err := os.ReadFile(filepath.Join(config.GetConfig().SchemaConfig.Dir, TemplatesDir, CreateLoginTemplate))
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf(string(sqlFmtBytes), loginName, dbName), nil
+	return fmt.Sprintf(string(sqlFmtBytes), loginName, dbName, loginPass), nil
 }
 
 // GetCreateUserScript loads the CreateUser template, substitutes variables, and returns the sql script as a string

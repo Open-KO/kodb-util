@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultOpenKoDbDir = "../OpenKO-db"
+	defaultOpenKoDbDir = "./OpenKO-db"
 )
 
 type Args struct {

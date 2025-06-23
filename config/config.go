@@ -30,9 +30,13 @@ type SchemaConfig struct {
 type GenDbConfig struct {
 	Name    string   `yaml:"name"`
 	Schemas []string `yaml:"schemas"`
-	Logins  []string `yaml:"logins"`
+	Logins  []Login  `yaml:"logins"`
 }
 
+type Login struct {
+	Name string `yaml:"name"`
+	Pass string `yaml:"pass"`
+}
 type UserConfig struct {
 	Name   string `yaml:"name"`
 	Schema string `yaml:"schema"`

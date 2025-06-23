@@ -152,6 +152,12 @@ func ExportJsonSchema() (err error) {
 				jsonTableDef.Columns[ix].IsPrimaryKey = false
 			}
 
+			if strings.HasPrefix(dbColumns[ix].Constraint, "IX_") {
+				jsonTableDef.Columns[ix].Unique = dbColumns[ix].Constraint
+			} else {
+				jsonTableDef.Columns[ix].Unique = ""
+			}
+
 			if dbColumns[ix].AllowNull == "YES" {
 				jsonTableDef.Columns[ix].AllowNull = true
 			} else {
@@ -161,7 +167,13 @@ func ExportJsonSchema() (err error) {
 
 			jsonTableDef.Columns[ix].DefaultValue = parseDefaultValue(dbColumns[ix].DefaultVal, dbColumns[ix].Type)
 
+			if dbColumns[ix].Length > 8000 {
+				// DB using intMax for unspecified length
+				dbColumns[ix].Length = 0
+			}
+
 			jsonTableDef.Columns[ix].Length = dbColumns[ix].Length
+
 		}
 
 		// sanity check, column list should be in sync

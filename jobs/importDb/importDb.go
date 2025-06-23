@@ -243,14 +243,14 @@ func importLogins(ctx context.Context) (err error) {
 	sArgs := defaultScriptArgs()
 	sArgs.isUseDefaultSystemDb = true
 	scripts := []string{}
-	for _, loginName := range config.GetConfig().SchemaConfig.GameDb.Logins {
-		script, err := artifacts.GetCreateLoginScript(loginName, config.GetConfig().SchemaConfig.GameDb.Name)
+	for _, login := range config.GetConfig().SchemaConfig.GameDb.Logins {
+		script, err := artifacts.GetCreateLoginScript(login.Name, config.GetConfig().SchemaConfig.GameDb.Name, login.Pass)
 		if err != nil {
 			return err
 		}
 
 		if CreateManualArtifacts {
-			err = artifacts.ExportLoginArtifact(loginName, script)
+			err = artifacts.ExportLoginArtifact(login.Name, script)
 			if err != nil {
 				return err
 			}
