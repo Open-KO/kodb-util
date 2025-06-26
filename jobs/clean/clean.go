@@ -2,11 +2,8 @@ package clean
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"kodb-util/config"
 	"kodb-util/mssql"
-	"log"
 	"strings"
 )
 
@@ -15,48 +12,25 @@ const (
 	dropDbSqlFmt   = "DROP DATABASE IF EXISTS [%s]"
 )
 
-// Clean will remove any existing [databaseConfig.dbname] database and knight user from an mssql instance
-func Clean(ctx context.Context) (err error) {
+// Clean will remove any existing [schemaConfig.gameDb.name] database and [schemaConfig.gameDb.users] from an mssql instance
+func Clean(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
 	fmt.Println("-- Clean --")
-	driver := mssql.NewMssqlDbDriver()
-	var tx *sql.Tx
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Recovered from panic: %v", r)
-			if err == nil {
-				err = fmt.Errorf("panic: %v", r)
-			}
-		}
-
-		if tx != nil && err != nil {
-			fmt.Println("Rolling back transaction")
-			_ = tx.Rollback()
-		}
-
-		driver.CloseConnection()
-	}()
-
-	// Get a connection to the [master] database
-	conn, err := driver.GetConnectionToDbName(mssql.DefaultSysDbName)
+	conn, err := driver.GetMasterConnection()
 	if err != nil {
 		return err
 	}
 
-	// start session
-	fmt.Println("Starting transaction")
-	tx, err = conn.BeginTx(ctx, nil)
-
-	fmt.Print(fmt.Sprintf("Dropping %s database... ", config.GetConfig().SchemaConfig.GameDb.Name))
-	_, err = conn.Exec(fmt.Sprintf(dropDbSqlFmt, config.GetConfig().SchemaConfig.GameDb.Name))
+	fmt.Print(fmt.Sprintf("Dropping %s database... ", driver.GenDbConfig.Name))
+	err = conn.Exec(fmt.Sprintf(dropDbSqlFmt, driver.GenDbConfig.Name)).Error
 	if err != nil {
 		return err
 	}
 	fmt.Println(" Done")
 
-	// Drop the users we're about to create
-	for _, user := range config.GetConfig().SchemaConfig.Users {
+	// If the users we're about to create exist in the system database, drop them
+	for _, user := range driver.GenDbConfig.Users {
 		fmt.Print(fmt.Sprintf("Dropping user %s... ", user.Name))
-		_, err = conn.Exec(fmt.Sprintf(dropUserSqlFmt, user.Name))
+		err = conn.Exec(fmt.Sprintf(dropUserSqlFmt, user.Name)).Error
 		if err != nil {
 			// ignore failed drop error - user may not exist.
 			if !strings.HasPrefix(err.Error(), "mssql: Cannot drop the login") {
@@ -66,12 +40,6 @@ func Clean(ctx context.Context) (err error) {
 			err = nil
 		}
 		fmt.Println(" Done")
-	}
-
-	fmt.Println("Committing transaction")
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return err

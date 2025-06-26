@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/kenner2/OpenKO-db v0.0.0-00010101000000-000000000000
-	github.com/kenner2/openko-gorm v0.0.0-20250619205959-2c2c712264d0
+	github.com/kenner2/openko-gorm v0.0.0-20250626002005-17e8121dd958
 	github.com/microsoft/go-mssqldb v1.8.2
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlserver v1.6.0
@@ -18,11 +18,8 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	golang.org/x/crypto v0.24.0 // indirect
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/text v0.26.0 // indirect
 )
-
-replace gorm.io/gorm => github.com/kenner2/gorm v0.0.0-20250620020828-eafdc3784886
-
-replace github.com/kenner2/openko-gorm => ../ko-codegen/openko-gorm
 
 replace github.com/kenner2/OpenKO-db => ./OpenKO-db

@@ -1,4 +1,4 @@
-package exportJsonSchema
+package export
 
 import (
 	"encoding/json"
@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"github.com/kenner2/OpenKO-db/jsonSchema"
 	"github.com/kenner2/OpenKO-db/jsonSchema/enums/tsql"
-	"gorm.io/driver/sqlserver"
-	"gorm.io/gorm"
 	"kodb-util/config"
 	"kodb-util/mssql"
 	"os"
@@ -17,11 +15,20 @@ import (
 )
 
 const (
-	jsonSchemaDir           = "jsonSchema"
-	getTableNamesSql        = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' and TABLE_TYPE = 'BASE TABLE'`
-	jsonSchemaNameFmt       = "%s.json"
+	// jsonSchemaDir is the sub-directory we interact with for exports
+	jsonSchemaDir = "jsonSchema"
+
+	// getTableNamesSql pulls a list of all our gameDb table names (dbo schema only) from the INFORMATION_SCHEMA
+	getTableNamesSql = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' and TABLE_TYPE = 'BASE TABLE'`
+
+	// 1. table name
+	// jsonSchemaNameFmt output format for jsonSchema file names
+	jsonSchemaNameFmt = "%s.json"
+
+	// jsonSchemaSearchPattern is the pattern used to load files from the jsonSchemaDir
 	jsonSchemaSearchPattern = "*.json"
 
+	// getColumnDefSqlFmt selects column definition information from the INFORMATION_SCHEMA that we use to sync/create jsonSchema database-based properties
 	getColumnDefSqlFmt = `SELECT
 	cols.COLUMN_NAME,
 	cols.ORDINAL_POSITION,
@@ -39,8 +46,12 @@ where
 	cols.TABLE_SCHEMA = 'dbo' and 
 	cols.TABLE_NAME = '%s'
 ORDER BY ORDINAL_POSITION`
+
+	// todoMarker is stubbed into new jsonSchema definitions that will need to have codegen-specific properties manually set
+	todoMarker = "MANUAL_TODO"
 )
 
+// DbColumnDef binds to the result of the getColumnDefSqlFmt query, and is used to map this information into the jsonSchema
 type DbColumnDef struct {
 	Name       string        `gorm:"column:COLUMN_NAME"`
 	Position   int           `gorm:"column:ORDINAL_POSITION"`
@@ -53,23 +64,24 @@ type DbColumnDef struct {
 	//Scale      int                    `gorm:"column:NUMERIC_SCALE"`
 }
 
-func ExportJsonSchema() (err error) {
+// JsonSchema reads table/column definitions from INFORMATION_SCHEMA and updates/creates jsonSchema definitions with the results
+func JsonSchema(driver *mssql.MssqlDbDriver) (err error) {
 	fmt.Println("-- Exporting jsonSchema --")
 
-	driver := mssql.NewMssqlDbDriver()
-	gConf := &gorm.Config{}
-	dialector := sqlserver.Open(driver.GetConnectionString(config.GetConfig().SchemaConfig.GameDb.Name))
-	db, err := gorm.Open(dialector, gConf)
+	gormConn, err := driver.GetConnection()
 	if err != nil {
 		return err
 	}
 	tableNames := []string{}
-	db.Raw(getTableNamesSql).Scan(&tableNames)
+	err = gormConn.Raw(getTableNamesSql).Scan(&tableNames).Error
+	if err != nil {
+		return err
+	}
 	if len(tableNames) == 0 {
 		return fmt.Errorf("no results from INFORMATION_SCHEMA.TABLES")
 	}
 
-	jsonSchemaPath := filepath.Join(config.GetConfig().SchemaConfig.Dir, jsonSchemaDir)
+	jsonSchemaPath := filepath.Join(config.GetConfig().GenConfig.SchemaDir, jsonSchemaDir)
 	for i := range tableNames {
 		schemaFileName := fmt.Sprintf(jsonSchemaNameFmt, strings.ToLower(tableNames[i]))
 		fmt.Println(fmt.Sprintf("Exporting %s to jsonSchema file %s", tableNames[i], schemaFileName))
@@ -100,18 +112,22 @@ func ExportJsonSchema() (err error) {
 			}
 		} else {
 			// Stub in default information
-			jsonTableDef.ClassName = "MANUAL_TODO"
-			jsonTableDef.Description = "MANUAL_TODO"
-			// TODO: When updating for multi-table support, db number will need to be correctly assigned
-			jsonTableDef.Database = 0
+			jsonTableDef.ClassName = todoMarker
+			jsonTableDef.Description = todoMarker
 		}
 
 		// make sure name case is in line with database
 		jsonTableDef.Name = tableNames[i]
 
+		// update the database type
+		jsonTableDef.Database = driver.DbType
+
 		// fetch the column definitions for the table
 		var dbColumns []DbColumnDef
-		db.Raw(fmt.Sprintf(getColumnDefSqlFmt, tableNames[i])).Scan(&dbColumns)
+		err = gormConn.Raw(fmt.Sprintf(getColumnDefSqlFmt, tableNames[i])).Scan(&dbColumns).Error
+		if err != nil {
+			return err
+		}
 		if len(dbColumns) == 0 {
 			return fmt.Errorf("no results from INFORMATION_SCHEMA.COLUMNS")
 		}
@@ -120,7 +136,7 @@ func ExportJsonSchema() (err error) {
 			jsonTableDef.Columns = make([]jsonSchema.Column, 0, len(dbColumns))
 		}
 
-		// do a pass removing any non-db dbColumns
+		// do a pass removing any non-dbColumns that may exist in jsonTableDef.Columns
 		for ix := 0; ix < len(jsonTableDef.Columns); ix++ {
 			deletedCol := true
 			for jx := range dbColumns {
@@ -165,10 +181,10 @@ func ExportJsonSchema() (err error) {
 			}
 			jsonTableDef.Columns[ix].Type = dbColumns[ix].Type
 
-			jsonTableDef.Columns[ix].DefaultValue = parseDefaultValue(dbColumns[ix].DefaultVal, dbColumns[ix].Type)
+			jsonTableDef.Columns[ix].DefaultValue = parseDefaultValue(dbColumns[ix].DefaultVal)
 
 			if dbColumns[ix].Length > 8000 {
-				// DB using intMax for unspecified length
+				// DB using intMax for unspecified length (text/image types, usually)
 				dbColumns[ix].Length = 0
 			}
 
@@ -200,7 +216,8 @@ func ExportJsonSchema() (err error) {
 	return nil
 }
 
-func parseDefaultValue(def *string, _type tsql.TSqlType) string {
+// parseDefaultValue cleans the parathesis wrapping that sql server adds
+func parseDefaultValue(def *string) string {
 	if def != nil && len(*def) > 0 {
 		origLen := len(*def)
 		// remove outer () wraps
@@ -220,9 +237,9 @@ func parseDefaultValue(def *string, _type tsql.TSqlType) string {
 	return ""
 }
 
-// Returns a column with non-database properties pre-filled with TODO Markers
+// getDefaultColumn returns a column with non-database properties pre-filled with todoMarker
 func getDefaultColumn() (col jsonSchema.Column) {
-	col.PropertyName = "MANUAL_TODO"
-	col.Description = "MANUAL_TODO"
+	col.PropertyName = todoMarker
+	col.Description = todoMarker
 	return col
 }
