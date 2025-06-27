@@ -14,10 +14,8 @@ This utility mutates the configured user (default: `knight`) as part of its impo
 * use your `sa` login
 * configure a user with similar permissions
 
-You'll need a copy of `OpenKO-db` to run this program against.  This is set up as a git submodule (explained below), but 
-you can override it in your settings with schemaConfig.dir
-
-(TODO:  Link OpenKO-db repo when opened under OpenKO org)
+You'll need a copy of [OpenKO-db](https://github.com/Open-KO/OpenKO-db) to run this program against.  This is set up as a git submodule (explained below), but 
+you can override it in your settings with `genConfig.schemaDir`.
 
 ## Dependencies
 The following commands assume that you have a terminal open in the root folder of the project.
