@@ -2,7 +2,7 @@ package export
 
 import (
 	"fmt"
-	"github.com/kenner2/openko-gorm/kogen"
+	"github.com/Open-KO/OpenKO-gorm/kogen"
 	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/mssql"

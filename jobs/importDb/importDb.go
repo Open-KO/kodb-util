@@ -3,7 +3,7 @@ package importDb
 import (
 	"context"
 	"fmt"
-	"github.com/kenner2/openko-gorm/kogen"
+	"github.com/Open-KO/OpenKO-gorm/kogen"
 	"gorm.io/gorm"
 	"kodb-util/artifacts"
 	"kodb-util/config"

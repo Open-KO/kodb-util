@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/Open-KO/OpenKO-db v0.1.1
-	github.com/kenner2/openko-gorm v0.0.0-20250627005115-81cc9edd45de
+	github.com/Open-KO/OpenKO-gorm v0.1.0
 	github.com/microsoft/go-mssqldb v1.9.1
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlserver v1.6.0
