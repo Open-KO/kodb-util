@@ -2,7 +2,7 @@ package mssql
 
 import (
 	"fmt"
-	"github.com/kenner2/OpenKO-db/jsonSchema/enums/dbType"
+	"github.com/Open-KO/OpenKO-db/jsonSchema/enums/dbType"
 	_ "github.com/microsoft/go-mssqldb"
 	"gorm.io/driver/sqlserver"
 	"gorm.io/gorm"

@@ -3,7 +3,7 @@ module kodb-util
 go 1.24.1
 
 require (
-	github.com/kenner2/OpenKO-db v0.0.0-00010101000000-000000000000
+	github.com/Open-KO/OpenKO-db v0.1.1
 	github.com/kenner2/openko-gorm v0.0.0-20250627005115-81cc9edd45de
 	github.com/microsoft/go-mssqldb v1.9.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -21,5 +21,3 @@ require (
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/text v0.26.0 // indirect
 )
-
-replace github.com/kenner2/OpenKO-db => ./OpenKO-db

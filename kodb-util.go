@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kenner2/OpenKO-db/jsonSchema/enums/dbType"
+	"github.com/Open-KO/OpenKO-db/jsonSchema/enums/dbType"
 	"github.com/kenner2/openko-gorm/kogen"
 	"gorm.io/gorm"
 	"kodb-util/config"

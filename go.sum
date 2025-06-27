@@ -15,6 +15,8 @@ github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.1/go.mod h
 github.com/AzureAD/microsoft-authentication-library-for-go v0.5.1/go.mod h1:Vt9sXTKwMyGcOxSmLDMnGPgqsUg7m8pe215qMLrDXw4=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.4.2 h1:oygO0locgZJe7PpYPXT5A29ZkwJaPqcva7BVeemZOZs=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.4.2/go.mod h1:wP83P5OoQ5p6ip3ScPr0BAq0BvuPAvacpEuSzyouqAI=
+github.com/Open-KO/OpenKO-db v0.1.1 h1:MqKnDoEQeMnN6/z5C4cO1RXrYmkxJLOee6/7laANjiM=
+github.com/Open-KO/OpenKO-db v0.1.1/go.mod h1:m20NPn3Py7LdU9/DbrKkpNnI+6T8cwF6BaAXQYZOIyY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
