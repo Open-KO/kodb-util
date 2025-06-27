@@ -2,80 +2,107 @@ package importDb
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"github.com/Open-KO/OpenKO-gorm/kogen"
+	"gorm.io/gorm"
+	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/mssql"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
-const (
-	DatabasesDir   = "Databases"
-	LoginsDir      = "Logins"
-	UsersDir       = "Users"
-	SchemasDir     = "Schemas"
-	TablesDir      = "Tables"
-	ViewsDir       = "Views"
-	StoredProcsDir = "StoredProcedures"
+var (
 
-	sqlExtPattern   = "*.sql"
-	batchTerminator = "\nGO"
+	// ImportBatSize is used to set the number of insert records sent in each batch.  Valid values 2-999.
+	ImportBatSize = 16
+
+	// this was benchmarked, changing it may cause performance issues:
+	//table data successfully imported in 1m37.0268984s; batch size 999
+	//table data successfully imported in 1m7.0408631s; batch size 500
+	//table data successfully imported in 52.0091316s; batch size 200
+	//table data successfully imported in 46.7709405s; batch size 100
+	//table data successfully imported in 42.6671243s; batch size 50
+	//table data successfully imported in 45.1741919s; batch size 32
+	//table data successfully imported in 45.0607315s; batch size 20
+	//table data successfully imported in 8.2753s; batch size 16
+	//table data successfully imported in 9.0527814s; batch size 10
+	//table data successfully imported in 9.6099392s; batch size 8
+	//table data successfully imported in 13.9534485s; batch size 4
+	//table data successfully imported in 19.8701158s; batch size 2
+	// curious how it may run on other machines, particularly ones with different numbers of cores.
+	// benchmark data above run on: Intel(R) Core(TM) i9-9900K CPU @ 3.60GHz
 )
 
-type ScriptArgs struct {
-	// Should use the [master] database in the connection string instead of [databaseConfig.dbname]
-	isUseDefaultSystemDb bool
-	// isNoTx set to true to not use a Tx fence.  See: https://go.dev/doc/database/execute-transactions#best_practices
-	isNoTx bool
+// Script contains the file Name and Sql contents of a *.sql file
+type Script struct {
+	Name string
+	Sql  string
 }
 
+// ScriptArgs are arguments used in the runScripts function
+type ScriptArgs struct {
+	// IsUseDefaultSystemDb will use the mssql.DefaultSysDbName (master) when true.  Default false
+	IsUseDefaultSystemDb bool
+
+	// IsDataDump set to true for loading one of our insert dumps; our dumps do not use "GO" batch separators and must be manually split
+	// this is done to keep our insert files diff-friendly and allow us to adjust the ImportBatSize for performance tuning
+	IsDataDump bool
+}
+
+// defaultScriptArgs returns a ScriptArgs object with default values
 func defaultScriptArgs() ScriptArgs {
 	return ScriptArgs{
-		isUseDefaultSystemDb: false,
-		isNoTx:               false,
+		IsUseDefaultSystemDb: false,
+		IsDataDump:           false,
 	}
 }
 
-// ImportDb attempts to load all of the MSSQL .sql batch files from the OpenKO-db project into an MSSQL instance
-// Some of these batches execute against the default (master) database (DB, user, login create), the rest should be
-// executed using the created database named in databaseConfig.dbname
-func ImportDb(ctx context.Context) (err error) {
+// ImportDb attempts to load all *.sql batch files from the OpenKO-db project into an MSSQL instance
+// Database creation scripts execute against mssql.DefaultSysDbName, the rest should be
+// executed using the created database named in schemaConfig.GameDb.Name
+func ImportDb(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
 	fmt.Println("-- Import --")
 
-	err = importDbs(ctx)
+	err = importDbs(ctx, driver)
 	if err != nil {
 		return err
 	}
 
-	err = importLogins(ctx)
+	// open tx to game db
+	_, err = driver.GetTx()
 	if err != nil {
 		return err
 	}
 
-	err = importUsers(ctx)
+	err = importSchemas(ctx, driver)
 	if err != nil {
 		return err
 	}
 
-	err = importSchemas(ctx)
+	err = importUsers(ctx, driver)
 	if err != nil {
 		return err
 	}
 
-	err = importTables(ctx)
+	err = importLogins(ctx, driver)
 	if err != nil {
 		return err
 	}
 
-	err = importViews(ctx)
+	err = importTables(ctx, driver)
 	if err != nil {
 		return err
 	}
 
-	err = importStoredProcs(ctx)
+	err = importViews(ctx, driver)
+	if err != nil {
+		return err
+	}
+
+	err = importStoredProcs(ctx, driver)
 	if err != nil {
 		return err
 	}
@@ -85,193 +112,284 @@ func ImportDb(ctx context.Context) (err error) {
 
 // runScripts runs a related group of sql files.  Each file is broken down into batches (separated by the "GO" keyword)
 // and then executed/commited within a transaction fence.
-func runScripts(ctx context.Context, fileNames []string, scriptArgs ScriptArgs) (err error) {
-	fmt.Println(fmt.Sprintf("Found %d scripts", len(fileNames)))
-	if len(fileNames) == 0 {
+func runScripts(ctx context.Context, driver *mssql.MssqlDbDriver, scriptArgs ScriptArgs, sqlScripts ...Script) (err error) {
+	if len(sqlScripts) == 0 {
+		fmt.Println("WARN: No scripts to execute")
 		return nil
 	}
 
-	driver := mssql.NewMssqlDbDriver()
-	var tx *sql.Tx
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("Recovered from panic: %v", r)
-			if err == nil {
-				err = fmt.Errorf("panic: %v", r)
-			}
-		}
-
-		// attempt to rollback any transaction fence on error
-		if tx != nil && err != nil {
-			fmt.Println("Rolling back DB transaction")
-			_ = tx.Rollback()
-		}
-
-		driver.CloseConnection()
-	}()
-
-	var conn *sql.DB
-	if scriptArgs.isUseDefaultSystemDb {
-		conn, err = driver.GetConnectionToDbName(mssql.DefaultSysDbName)
+	// get gorm connection
+	var gormConn *gorm.DB
+	if scriptArgs.IsUseDefaultSystemDb {
+		gormConn, err = driver.GetMasterConnection()
 	} else {
-		conn, err = driver.GetConnection()
+		gormConn, err = driver.GetTx()
 	}
 	if err != nil {
 		return err
 	}
 
-	for i := range fileNames {
-		fmt.Println(fmt.Sprintf("Reading %s", fileNames[i]))
-		sqlBytes, err := os.ReadFile(fileNames[i])
-		if err != nil {
-			return err
-		}
+	for i := range sqlScripts {
+		batches := []string{}
+		if scriptArgs.IsDataDump {
 
-		sqlStr := string(sqlBytes)
-		batches := splitBatches(sqlStr)
+			lines := strings.Split(sqlScripts[i].Sql, "\n")
+			// sliding window batches
+			l := 1
+			r := l + ImportBatSize
 
-		fmt.Println(fmt.Sprintf("file contains %d batches", len(batches)))
-		if len(batches) == 0 {
-			// if there are no valid batches, skip this file before we open a TX
-			continue
-		}
+			header := fmt.Sprintf("%s\n", lines[0])
+			for l < len(lines) {
+				// put r back on tail element if exceeded
+				if r >= len(lines) {
+					r = len(lines) - 1
+				}
 
-		if !scriptArgs.isNoTx {
-			fmt.Println("Beginning DB transaction")
-			tx, err = conn.BeginTx(ctx, nil)
-			if err != nil {
-				return fmt.Errorf("failed to begin transaction: %v", err)
+				// remove any trailing "," from previous batch
+				if len(batches) > 0 {
+					batches[len(batches)-1] = strings.TrimSpace(batches[len(batches)-1])
+					batches[len(batches)-1] = strings.TrimSuffix(batches[len(batches)-1], ",")
+				}
+
+				if l == r {
+					// make sure we didn't just land on the blank line at the end of the file
+					if strings.TrimSpace(lines[l]) == "" {
+						break
+					}
+				}
+
+				// capture current window as batch
+				// insert header
+				batch := header + strings.Join(lines[l:r+1], "\n")
+				batches = append(batches, batch)
+				l = r + 1
+				r += ImportBatSize
 			}
+		} else {
+			batches = splitBatches(sqlScripts[i].Sql)
 		}
 
-		fmt.Print(fmt.Sprintf("Executing %d batches... ", len(batches)))
 		for j := range batches {
-			_, err = conn.Exec(batches[j])
+			err = gormConn.Exec(batches[j]).Error
 			if err != nil {
 				if !isIgnoreErr(err) {
-					fmt.Printf("\nError executing batch [%d/%d]: %v\n", j+1, len(batches), err)
+					fmt.Printf("error executing batch [%d/%d] in %s: %v\n", j+1, len(batches), sqlScripts[i].Name, err)
+					fmt.Printf("batch sql: %s", batches[j])
 					return err
 				} else {
 					err = nil
 				}
 			}
 		}
-		fmt.Println(" Done")
-
-		// transaction fence handling, when used
-		if tx != nil {
-			fmt.Println("Committing DB transaction")
-			txErr := tx.Commit()
-			if txErr != nil {
-				return fmt.Errorf("failed to commit transaction: %v", txErr)
-			}
-			tx = nil
-		}
 	}
 
 	return nil
 }
 
-func importDbs(ctx context.Context) (err error) {
+// importDbs uses the CreateDatabase.sqltemplate to create the database configured in schemaConfig.gameDb
+func importDbs(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("databases successfully imported")
+		}
+	}()
 	fmt.Println("-- Importing databases --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, DatabasesDir))
+	sArgs := defaultScriptArgs()
+	sArgs.IsUseDefaultSystemDb = true
+
+	script := Script{
+		Name: fmt.Sprintf(artifacts.ExportDatabaseFileNameFmt, driver.GenDbConfig.Name),
+	}
+
+	script.Sql, err = artifacts.GetCreateDatabaseScript(driver)
 	if err != nil {
 		return err
 	}
 
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
+	return runScripts(ctx, driver, sArgs, script)
 }
 
-func importLogins(ctx context.Context) (err error) {
-	fmt.Println("-- Importing Logins --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, LoginsDir))
-	if err != nil {
-		return err
-	}
-
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
-}
-
-func importUsers(ctx context.Context) (err error) {
-	fmt.Println("-- Importing Users --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, UsersDir))
-	if err != nil {
-		return err
-	}
-
-	sArgs := defaultScriptArgs()
-	sArgs.isUseDefaultSystemDb = true
-	return runScripts(ctx, scripts, sArgs)
-}
-
-func importSchemas(ctx context.Context) (err error) {
+// importSchemas uses the CreateSchema.sqltemplate to create schemas defined in schemaConfig.gameDb.schemas
+func importSchemas(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("schemas successfully imported")
+		}
+	}()
 	fmt.Println("-- Importing Schemas --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, SchemasDir))
+	sArgs := defaultScriptArgs()
+	scripts := []Script{}
+	for i := range driver.GenDbConfig.Schemas {
+		script := Script{
+			Name: fmt.Sprintf(artifacts.ExportSchemaFileNameFmt, driver.GenDbConfig.Schemas[i]),
+		}
+		script.Sql, err = artifacts.GetCreateSchemaScript(driver, i)
+		if err != nil {
+			return err
+		}
+
+		scripts = append(scripts, script)
+	}
+
+	return runScripts(ctx, driver, sArgs, scripts...)
+}
+
+// importUsers uses the CreateUser.sqltemplate to create users defined in schemaConfig.gameDb.users
+func importUsers(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("users successfully imported")
+		}
+	}()
+	fmt.Println("-- Importing Users --")
+	sArgs := defaultScriptArgs()
+	scripts := []Script{}
+	for i := range driver.GenDbConfig.Users {
+		script := Script{
+			Name: fmt.Sprintf(artifacts.ExportUserFileNameFmt, driver.GenDbConfig.Users[i].Name),
+		}
+		script.Sql, err = artifacts.GetCreateUserScript(driver, i)
+		if err != nil {
+			return err
+		}
+
+		scripts = append(scripts, script)
+	}
+
+	return runScripts(ctx, driver, sArgs, scripts...)
+}
+
+// importLogins uses the CreateLogin.sqltemplate to create logins defined in schemaConfig.gameDb.logins
+func importLogins(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("logins successfully imported")
+		}
+	}()
+	fmt.Println("-- Importing Logins --")
+	sArgs := defaultScriptArgs()
+	sArgs.IsUseDefaultSystemDb = true
+	scripts := []Script{}
+	for i := range driver.GenDbConfig.Logins {
+		script := Script{
+			Name: fmt.Sprintf(artifacts.ExportLoginFileNameFmt, driver.GenDbConfig.Logins[i].Name),
+		}
+		script.Sql, err = artifacts.GetCreateLoginScript(driver, i)
+		if err != nil {
+			return err
+		}
+
+		scripts = append(scripts, script)
+	}
+
+	return runScripts(ctx, driver, sArgs, scripts...)
+}
+
+// importTables uses the openko-gorm model library to run CREATE TABLE sql scripts, then
+// inserts the table data defined in OpenKO-db/ManualSetup/6_InsertData_*.sql
+func importTables(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	fmt.Println("-- Creating Tables --")
+	scripts := []Script{}
+	for i := range kogen.ModelList {
+		script := Script{
+			Name: fmt.Sprintf(artifacts.ExportTableFileNameFmt, kogen.ModelList[i].TableName()),
+		}
+		script.Sql = kogen.ModelList[i].GetCreateTableString()
+		scripts = append(scripts, script)
+	}
+
+	err = runScripts(ctx, driver, defaultScriptArgs(), scripts...)
 	if err != nil {
 		return err
 	}
+	fmt.Println("table structures successfully created")
 
-	return runScripts(ctx, scripts, defaultScriptArgs())
-}
-
-func importTables(ctx context.Context) (err error) {
-	fmt.Println("-- Importing Tables --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, TablesDir))
+	fmt.Println("-- Importing Table Data --")
+	fmt.Println("this may take several minutes")
+	start := time.Now()
+	args := defaultScriptArgs()
+	args.IsDataDump = true
+	scripts, err = getSqlScriptsByPattern(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), fmt.Sprintf(artifacts.ExportTableDataFileNameFmt, "*"))
 	if err != nil {
 		return err
 	}
-
-	return runScripts(ctx, scripts, defaultScriptArgs())
+	err = runScripts(ctx, driver, args, scripts...)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("table data successfully imported in %.2f seconds; batch size %d\n", time.Since(start).Seconds(), ImportBatSize)
+	return nil
 }
 
-func importViews(ctx context.Context) (err error) {
+// importViews executes the *.sql scripts in OpenKO-db/Views
+func importViews(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("views successfully imported")
+		}
+	}()
 	fmt.Println("-- Importing Views --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, ViewsDir))
+	scripts, err := getSqlScriptsByPattern(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), fmt.Sprintf(artifacts.ExportViewFileNameFmt, "*"))
 	if err != nil {
 		return err
 	}
 
-	return runScripts(ctx, scripts, defaultScriptArgs())
+	return runScripts(ctx, driver, defaultScriptArgs(), scripts...)
 }
 
-func importStoredProcs(ctx context.Context) (err error) {
+// importViews executes the *.sql scripts in OpenKO-db/StoredProcedures
+func importStoredProcs(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
+	defer func() {
+		if err == nil {
+			fmt.Println("stored procedures successfully imported")
+		}
+	}()
 	fmt.Println("-- Importing Stored Procedures --")
-	scripts, err := getSqlFileNames(filepath.Join(config.GetConfig().SchemaConfig.Dir, StoredProcsDir))
+	scripts, err := getSqlScriptsByPattern(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), fmt.Sprintf(artifacts.ExportStoredProcedureFileNameFmt, "*"))
 	if err != nil {
 		return err
 	}
 
 	sArgs := defaultScriptArgs()
-	// It is advised to not use TX fences when a script contains BEGIN/COMMIT keywords; however, I'm not sure if that's
-	// actually a problem here as those keywords are part of the body of the stored proc being created and not
-	// being executed.  Either way, I don't think it hurts to skip the Tx Fence for Stored proc creation
-	//
-	// from the doc:
-	// Use the APIs described in this section to manage transactions. Do not use transaction-related SQL statements such as
-	// BEGIN and COMMIT directly—doing so can leave your database in an unpredictable state, especially in concurrent programs.
-	// When using a transaction, take care not to call the non-transaction sql.DB methods directly, too, as those will execute
-	// outside the transaction, giving your code an inconsistent view of the state of the database or even causing deadlocks.
-	sArgs.isNoTx = true
-	return runScripts(ctx, scripts, sArgs)
+	return runScripts(ctx, driver, sArgs, scripts...)
 }
 
-// getSqlFileNames returns the list of *.sql files from a given directory
-func getSqlFileNames(dir string) (fileNames []string, err error) {
+// getSqlScripts returns the list of *.sql files from a given directory loaded into an array of Scripts
+func getSqlScripts(dir string) (sqlScripts []Script, err error) {
+	return getSqlScriptsByPattern(dir, mssql.SqlExtPattern)
+}
+
+// getSqlScriptsByPattern returns the list of files from a directory matching the given pattern
+func getSqlScriptsByPattern(dir string, pattern string) (sqlScripts []Script, err error) {
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("directory %s does not exist", dir)
 	}
-	return filepath.Glob(filepath.Join(dir, sqlExtPattern))
+	fileNames, err := filepath.Glob(filepath.Join(dir, pattern))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range fileNames {
+		//fmt.Println(fmt.Sprintf("Reading %s", fileNames[i]))
+		sqlBytes, err := os.ReadFile(fileNames[i])
+		if err != nil {
+			return nil, err
+		}
+		script := Script{
+			Name: fileNames[i],
+			Sql:  string(sqlBytes),
+		}
+		sqlScripts = append(sqlScripts, script)
+	}
+
+	return sqlScripts, nil
 }
 
 // splitBatches breaks an MSSQL .sql dump file into batch groups.  MSSQL dump files use "GO" statements to separate
 // batches.  The GO statement is not standard SQL and is only supported inside of MS SQL Management Studio, so we
 // need to parse around it.
 func splitBatches(sql string) (batches []string) {
-	batches = strings.Split(sql, batchTerminator)
+	batches = strings.Split(sql, mssql.BatchTerminator)
 	for i := range batches {
 		batches[i] = strings.TrimSpace(batches[i])
 		if batches[i] == "" {
@@ -284,14 +402,8 @@ func splitBatches(sql string) (batches []string) {
 // isIgnoreErr checks an error to see if it can be ignored; These are errors related to
 // failed DROP statements after a database clean or new setup
 func isIgnoreErr(err error) bool {
-	if strings.HasPrefix(err.Error(), "mssql: Cannot drop the login") ||
-		strings.HasPrefix(err.Error(), "mssql: Cannot drop the user") ||
-		strings.HasPrefix(err.Error(), "mssql: Cannot drop the schema") ||
-		strings.HasPrefix(err.Error(), "mssql: Cannot drop the index") ||
-		strings.HasPrefix(err.Error(), "mssql: Cannot drop the view") ||
-		strings.HasPrefix(err.Error(), "mssql: Cannot drop the procedure") ||
-		// table objects have alter statements before create
-		strings.HasPrefix(err.Error(), "mssql: Cannot find the object") {
+	if strings.HasPrefix(err.Error(), "mssql: Cannot drop the view") ||
+		strings.HasPrefix(err.Error(), "mssql: Cannot drop the procedure") {
 		return true
 	}
 	return false
