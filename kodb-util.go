@@ -179,5 +179,19 @@ func processDb(appCtx context.Context, db dbInfo, args Args) (err error) {
 		}
 	}
 
+	if args.ExportViews || args.ExportAll {
+		err = export.Views(driver)
+		if err != nil {
+			return err
+		}
+	}
+
+	if args.ExportProcs || args.ExportAll {
+		err = export.StoredProcedures(driver)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

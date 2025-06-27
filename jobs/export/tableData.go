@@ -18,12 +18,12 @@ func TableData(driver *mssql.MssqlDbDriver) (err error) {
 	// ensure ManualSetup directory exists
 	err = os.MkdirAll(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), os.ModePerm)
 	if err != nil {
-		fmt.Printf("failed to create the ManualSetup directory: %w\n", err)
+		fmt.Printf("failed to create the ManualSetup directory: %v\n", err)
 		return
 	}
 
 	// clean the old export files
-	files, err := filepath.Glob(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir, fmt.Sprintf("[6]_%s_.+[sql]", driver.DbType.String())))
+	files, err := filepath.Glob(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir, "[6][_]*.sql"))
 	if err != nil {
 		return err
 	}
@@ -56,6 +56,8 @@ func TableData(driver *mssql.MssqlDbDriver) (err error) {
 				}
 				sb.WriteString(results[j].GetInsertData())
 			}
+			// ensure EOF empty line
+			sb.WriteString("\n")
 			err = artifacts.ExportTableDataArtifact(driver, kogen.ModelList[i].TableName(), sb.String())
 			if err != nil {
 				return err

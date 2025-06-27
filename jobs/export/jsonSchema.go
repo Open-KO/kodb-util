@@ -36,16 +36,31 @@ const (
 	cols.IS_NULLABLE,
 	cols.DATA_TYPE,
 	cols.CHARACTER_MAXIMUM_LENGTH,
-	constraints.CONSTRAINT_NAME
+	cols.COLLATION_NAME,
+	cols.CHARACTER_SET_NAME
 FROM INFORMATION_SCHEMA.COLUMNS as cols
-LEFT JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE as constraints 
-	ON constraints.TABLE_SCHEMA = cols.TABLE_SCHEMA and
-		constraints.TABLE_NAME = cols.TABLE_NAME and
-		constraints.COLUMN_NAME = cols.COLUMN_NAME
 where 
 	cols.TABLE_SCHEMA = 'dbo' and 
 	cols.TABLE_NAME = '%s'
 ORDER BY ORDINAL_POSITION`
+
+	// 1: Table name
+	// getIndexDefSqlFmt selects index information for a given table
+	getIndexDefSqlFmt = `SELECT 
+	[name],
+	[type_desc],
+	[is_unique],
+	[is_primary_key]
+FROM [sys].[indexes]
+WHERE 
+	[type_desc] <> 'HEAP' and
+	[object_id] = (select [object_id] from [sys].[objects] where [name] = '%s')`
+
+	// 1. Index/Constraint name
+	// getIndexColumnsSqlFmt returns the list of columns used by the index
+	getIndexColumnsSqlFmt = `SELECT [COLUMN_NAME]
+FROM [INFORMATION_SCHEMA].[CONSTRAINT_COLUMN_USAGE]
+WHERE [CONSTRAINT_NAME] = '%s'`
 
 	// todoMarker is stubbed into new jsonSchema definitions that will need to have codegen-specific properties manually set
 	todoMarker = "MANUAL_TODO"
@@ -53,15 +68,14 @@ ORDER BY ORDINAL_POSITION`
 
 // DbColumnDef binds to the result of the getColumnDefSqlFmt query, and is used to map this information into the jsonSchema
 type DbColumnDef struct {
-	Name       string        `gorm:"column:COLUMN_NAME"`
-	Position   int           `gorm:"column:ORDINAL_POSITION"`
-	DefaultVal *string       `gorm:"column:COLUMN_DEFAULT"`
-	AllowNull  string        `gorm:"column:IS_NULLABLE"`
-	Type       tsql.TSqlType `gorm:"column:DATA_TYPE"`
-	Length     int           `gorm:"column:CHARACTER_MAXIMUM_LENGTH"`
-	Constraint string        `gorm:"column:CONSTRAINT_NAME"`
-	//Precision  int                    `gorm:"column:NUMERIC_PRECISION"`
-	//Scale      int                    `gorm:"column:NUMERIC_SCALE"`
+	Name          string        `gorm:"column:COLUMN_NAME"`
+	Position      int           `gorm:"column:ORDINAL_POSITION"`
+	DefaultVal    *string       `gorm:"column:COLUMN_DEFAULT"`
+	AllowNull     string        `gorm:"column:IS_NULLABLE"`
+	Type          tsql.TSqlType `gorm:"column:DATA_TYPE"`
+	Length        int           `gorm:"column:CHARACTER_MAXIMUM_LENGTH"`
+	CollationName *string       `gorm:"column:COLLATION_NAME"`
+	CharacterSet  *string       `gorm:"column:CHARACTER_SET_NAME"`
 }
 
 // JsonSchema reads table/column definitions from INFORMATION_SCHEMA and updates/creates jsonSchema definitions with the results
@@ -122,6 +136,20 @@ func JsonSchema(driver *mssql.MssqlDbDriver) (err error) {
 		// update the database type
 		jsonTableDef.Database = driver.DbType
 
+		// get the index definitions for the table
+		var indexDefs []jsonSchema.IndexDef
+		err = gormConn.Raw(fmt.Sprintf(getIndexDefSqlFmt, jsonTableDef.Name)).Scan(&indexDefs).Error
+		if err != nil {
+			return err
+		}
+		for ix := range indexDefs {
+			err = gormConn.Raw(fmt.Sprintf(getIndexColumnsSqlFmt, indexDefs[ix].Name)).Scan(&indexDefs[ix].Columns).Error
+			if err != nil {
+				return err
+			}
+		}
+		jsonTableDef.Indexes = indexDefs
+
 		// fetch the column definitions for the table
 		var dbColumns []DbColumnDef
 		err = gormConn.Raw(fmt.Sprintf(getColumnDefSqlFmt, tableNames[i])).Scan(&dbColumns).Error
@@ -162,17 +190,6 @@ func JsonSchema(driver *mssql.MssqlDbDriver) (err error) {
 			}
 			jsonTableDef.Columns[ix].Name = dbColumns[ix].Name
 			jsonTableDef.Columns[ix].Type = dbColumns[ix].Type
-			if strings.HasPrefix(dbColumns[ix].Constraint, "PK_") {
-				jsonTableDef.Columns[ix].IsPrimaryKey = true
-			} else {
-				jsonTableDef.Columns[ix].IsPrimaryKey = false
-			}
-
-			if strings.HasPrefix(dbColumns[ix].Constraint, "IX_") {
-				jsonTableDef.Columns[ix].Unique = dbColumns[ix].Constraint
-			} else {
-				jsonTableDef.Columns[ix].Unique = ""
-			}
 
 			if dbColumns[ix].AllowNull == "YES" {
 				jsonTableDef.Columns[ix].AllowNull = true
@@ -190,6 +207,8 @@ func JsonSchema(driver *mssql.MssqlDbDriver) (err error) {
 
 			jsonTableDef.Columns[ix].Length = dbColumns[ix].Length
 
+			jsonTableDef.Columns[ix].CollationName = dbColumns[ix].CollationName
+			jsonTableDef.Columns[ix].CharacterSet = dbColumns[ix].CharacterSet
 		}
 
 		// sanity check, column list should be in sync

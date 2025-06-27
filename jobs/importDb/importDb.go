@@ -132,6 +132,7 @@ func runScripts(ctx context.Context, driver *mssql.MssqlDbDriver, scriptArgs Scr
 	for i := range sqlScripts {
 		batches := []string{}
 		if scriptArgs.IsDataDump {
+
 			lines := strings.Split(sqlScripts[i].Sql, "\n")
 			// sliding window batches
 			l := 1
@@ -150,6 +151,13 @@ func runScripts(ctx context.Context, driver *mssql.MssqlDbDriver, scriptArgs Scr
 					batches[len(batches)-1] = strings.TrimSuffix(batches[len(batches)-1], ",")
 				}
 
+				if l == r {
+					// make sure we didn't just land on the blank line at the end of the file
+					if strings.TrimSpace(lines[l]) == "" {
+						break
+					}
+				}
+
 				// capture current window as batch
 				// insert header
 				batch := header + strings.Join(lines[l:r+1], "\n")
@@ -161,16 +169,12 @@ func runScripts(ctx context.Context, driver *mssql.MssqlDbDriver, scriptArgs Scr
 			batches = splitBatches(sqlScripts[i].Sql)
 		}
 
-		if len(batches) == 0 {
-			// if there are no valid batches, skip this file before we open a TX
-			continue
-		}
-
 		for j := range batches {
 			err = gormConn.Exec(batches[j]).Error
 			if err != nil {
 				if !isIgnoreErr(err) {
 					fmt.Printf("error executing batch [%d/%d] in %s: %v\n", j+1, len(batches), sqlScripts[i].Name, err)
+					fmt.Printf("batch sql: %s", batches[j])
 					return err
 				} else {
 					err = nil
@@ -325,7 +329,7 @@ func importViews(ctx context.Context, driver *mssql.MssqlDbDriver) (err error) {
 		}
 	}()
 	fmt.Println("-- Importing Views --")
-	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ViewsDir))
+	scripts, err := getSqlScriptsByPattern(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), fmt.Sprintf(artifacts.ExportViewFileNameFmt, "*"))
 	if err != nil {
 		return err
 	}
@@ -341,7 +345,7 @@ func importStoredProcs(ctx context.Context, driver *mssql.MssqlDbDriver) (err er
 		}
 	}()
 	fmt.Println("-- Importing Stored Procedures --")
-	scripts, err := getSqlScripts(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.StoredProcsDir))
+	scripts, err := getSqlScriptsByPattern(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), fmt.Sprintf(artifacts.ExportStoredProcedureFileNameFmt, "*"))
 	if err != nil {
 		return err
 	}

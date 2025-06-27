@@ -15,7 +15,6 @@ import (
 const (
 
 	// directory constants for using the OpenKO-db project
-
 	TemplatesDir   = "Templates"
 	ViewsDir       = "Views"
 	StoredProcsDir = "StoredProcedures"
@@ -30,12 +29,14 @@ const (
 
 	// export file name formats:  [Step]_Create[Type]_[DbType.String()]_[ArtifactName].sql
 
-	ExportDatabaseFileNameFmt  = "1_CreateDatabase_%s.sql"
-	ExportSchemaFileNameFmt    = "2_CreateSchema_%s.sql"
-	ExportUserFileNameFmt      = "3_CreateUser_%s.sql"
-	ExportLoginFileNameFmt     = "4_CreateLogin_%s.sql"
-	ExportTableFileNameFmt     = "5_CreateTable_%s.sql"
-	ExportTableDataFileNameFmt = "6_InsertData_%s.sql"
+	ExportDatabaseFileNameFmt        = "1_CreateDatabase_%s.sql"
+	ExportSchemaFileNameFmt          = "2_CreateSchema_%s.sql"
+	ExportUserFileNameFmt            = "3_CreateUser_%s.sql"
+	ExportLoginFileNameFmt           = "4_CreateLogin_%s.sql"
+	ExportTableFileNameFmt           = "5_CreateTable_%s.sql"
+	ExportTableDataFileNameFmt       = "6_InsertData_%s.sql"
+	ExportViewFileNameFmt            = "7_CreateView_%s.sql"
+	ExportStoredProcedureFileNameFmt = "8_CreateStoredProc_%s.sql"
 )
 
 // ExportDatabaseArtifact writes the generated sql used to create a database in the last import to OpenKO-db/ManualSetup
@@ -68,6 +69,16 @@ func ExportTableArtifact(driver *mssql.MssqlDbDriver, name string, sqlScript str
 // ExportTableDataArtifact writes the gorm-generated sql used to create a table in the last import to OpenKO-db/ManualSetup
 func ExportTableDataArtifact(driver *mssql.MssqlDbDriver, name string, sqlScript string) (err error) {
 	return exportManualSetupArtifact(name, sqlScript, ExportTableDataFileNameFmt)
+}
+
+// ExportStoredProcArtifact writes the sql extracted using a system query to OpenKO-db/ManualSetup
+func ExportStoredProcArtifact(driver *mssql.MssqlDbDriver, name string, sqlScript string) (err error) {
+	return exportManualSetupArtifact(name, sqlScript, ExportStoredProcedureFileNameFmt)
+}
+
+// ExportViewArtifact writes the view sql extracted using a system query to OpenKO-db/ManualSetup
+func ExportViewArtifact(driver *mssql.MssqlDbDriver, name string, sqlScript string) (err error) {
+	return exportManualSetupArtifact(name, sqlScript, ExportViewFileNameFmt)
 }
 
 func exportManualSetupArtifact(name string, sqlScript string, fileNameFmt string) (err error) {

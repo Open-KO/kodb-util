@@ -22,12 +22,12 @@ func Structure(driver *mssql.MssqlDbDriver) (err error) {
 	// ensure ManualSetup directory exists
 	err = os.MkdirAll(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir), os.ModePerm)
 	if err != nil {
-		fmt.Printf("failed to create the ManualSetup directory: %w\n", err)
+		fmt.Printf("failed to create the ManualSetup directory: %v\n", err)
 		return
 	}
 
 	// clean old artifacts
-	files, err := filepath.Glob(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir, fmt.Sprintf("[1-5]_%s_.+[sql]", driver.DbType.String())))
+	files, err := filepath.Glob(filepath.Join(config.GetConfig().GenConfig.SchemaDir, artifacts.ManualSetupDir, "[1-5][_]*.sql"))
 	if err != nil {
 		return err
 	}
