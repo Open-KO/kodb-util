@@ -11,8 +11,7 @@ databaseConfig:
 # Order of operations:  Create DBs (with schemas), Create Users (with schemas), Create Logins (to databases)
 genConfig:
   # database project is setup as a git submodule
-  # to get for the first time: git submodule update --init --recursive
-  # to pull updates: git submodule update --recursive --remote
+  # to fetch updates: git submodule update --recursive --remote
   schemaDir: ./OpenKO-db
   gameDb:
     - name: KN_online
