@@ -30,7 +30,7 @@ We update/generate the content of:
 
 To fetch or update the submodule(s):
 ```shell
-git submodule update --recursive --remote
+git submodule update --init --recursive --remote
 ```
 
 This utility is programmed with Go 1.24+.  You'll need to install the language if you want to build locally. See https://go.dev/doc/install
