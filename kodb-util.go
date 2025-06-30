@@ -6,6 +6,7 @@ import (
 	"github.com/Open-KO/OpenKO-db/jsonSchema/enums/dbType"
 	"github.com/Open-KO/OpenKO-gorm/kogen"
 	"gorm.io/gorm"
+	"kodb-util/arg"
 	"kodb-util/config"
 	"kodb-util/jobs/clean"
 	"kodb-util/jobs/export"
@@ -43,7 +44,7 @@ func main() {
 	fmt.Println(fmt.Sprintf("%[2]s%[1]s%[2]s", appTitle, strings.Repeat(" ", titlePad)))
 	printHeaderRow()
 
-	args := getArgs()
+	args := arg.GetArgs()
 	if err := args.Validate(); err != nil {
 		fmt.Printf("arguments error: %v, closing.", err)
 		return
@@ -93,7 +94,7 @@ func main() {
 }
 
 // processDb attempts requested jobs for the given database
-func processDb(appCtx context.Context, db dbInfo, args Args) (err error) {
+func processDb(appCtx context.Context, db dbInfo, args arg.Args) (err error) {
 	// a clean driver should be used/configured per database as the application logic
 	// makes heavy use of the driver.GenDbConfig
 	driver := mssql.NewMssqlDbDriver(db.Config, db.Type)

@@ -1,4 +1,4 @@
-package main
+package arg
 
 import (
 	"flag"
@@ -49,8 +49,8 @@ func (this Args) HasExportJob() bool {
 	return false
 }
 
-// getArgs reads the CLI arguments using the go flag package
-func getArgs() (a Args) {
+// GetArgs reads the CLI arguments using the go flag package
+func GetArgs() (a Args) {
 	_clean := flag.Bool("clean", false, "Clean drops any configured users and drops the databaseConfig.dbname database")
 	_import := flag.Bool("import", false, "Runs clean and imports the contents of OpenKO-db/ManaualSetup, StoredProcedures, and Views")
 	importBatchSize := flag.Int("batchSize", 16, "Batch sized used when importing table data.  Valid range [2-999], if invalid value specified will default to 16")
