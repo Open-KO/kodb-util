@@ -90,3 +90,25 @@ To build `kodb-util.exe`, run the following command in this directory:
 ```shell
 go build
 ```
+
+## Troubleshooting
+
+### Error: unable to open tcp connection
+```
+unable to open tcp connection with host 'localhost:1433': dial tcp [::1]:1433: connectex: No connection could be made because the target machine actively refused it.
+```
+
+### Likely Solution
+
+You need to configure SQLServer to accept connections on the port specified in your configuration, or update your configuration 
+with the port used by your SQL Server instance.  The following steps will configure SQL Server to listen on port 1433.
+
+1. Open Sql Server Configuration Manager
+2. Expand `SQL Server Network Configuration`
+3. Select `Protocols for SQLEXPRESS` (or whatever edition you have installed)
+4. In the right pane, right click `TCP/IP` > Properties
+5. Go to the IP Addresses Tab, find the `IPAll` entry and enter your port (default: 1433) in the `TCP Port` field.
+6. Click OK to close the dialog box
+7. In the right pane, right click `TCP/IP` and select Enable.
+8. In the left pane, right click `SQL Server Services`
+9. In the right pane, right click `SQL Server (Instance Name)` and select Restart.
