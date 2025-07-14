@@ -18,6 +18,8 @@ const (
 	// jsonSchemaDir is the sub-directory we interact with for exports
 	jsonSchemaDir = "jsonSchema"
 
+	jsonSchemaProcedures = "procedures"
+
 	// getTableNamesSql pulls a list of all our gameDb table names (dbo schema only) from the INFORMATION_SCHEMA
 	getTableNamesSql = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' and TABLE_TYPE = 'BASE TABLE'`
 
@@ -64,16 +66,6 @@ WHERE [CONSTRAINT_NAME] = '%s'`
 
 	// todoMarker is stubbed into new jsonSchema definitions that will need to have codegen-specific properties manually set
 	todoMarker = "MANUAL_TODO"
-
-	// 1. Stored proc name
-	// getProcedureParams returns a list of stored procedure parameter definitions
-	getProcedureParams = `SELECT  
-	[name],  
-	type_name(user_type_id) as [type],  
-	max_length as [length],  
-	parameter_id as [paramOrder]
-FROM sys.parameters
-WHERE object_id = object_id('dbo.%[1]s')`
 )
 
 // DbColumnDef binds to the result of the getColumnDefSqlFmt query, and is used to map this information into the jsonSchema
