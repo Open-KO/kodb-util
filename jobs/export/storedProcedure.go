@@ -10,6 +10,7 @@ import (
 	"kodb-util/mssql"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -34,6 +35,8 @@ WHERE [is_ms_shipped] = 0`
 FROM sys.parameters
 WHERE object_id = '%[1]s'`
 )
+
+var returnReg = regexp.MustCompile(`(?i)^[\s]*return[\s][@]*[0-9a-z_]+`)
 
 type StoredProcDef struct {
 	Name     string `gorm:"column:name"`
@@ -86,6 +89,7 @@ func StoredProcedures(driver *mssql.MssqlDbDriver) (err error) {
 			return err
 		}
 		procDef.Params = params
+		procDef.HasReturn = IsProcWithReturn(storedProcs[i].Proc)
 		procDefs = append(procDefs, procDef)
 
 		storedProcs[i].Proc = storedProcs[i].Proc + "\n"
@@ -139,6 +143,7 @@ func updateProcDefs(procDefs []jsonSchema.ProcDef) (err error) {
 
 		// make sure name case is in line with database
 		jsonProcDef.Name = procDefs[i].Name
+		jsonProcDef.HasReturn = procDefs[i].HasReturn
 
 		if jsonProcDef.Params == nil {
 			jsonProcDef.Params = make([]jsonSchema.ParamDef, 0, len(procDefs[i].Params))
@@ -213,4 +218,18 @@ func snakeToCamelCase(dbName string) string {
 		out.WriteString(strings.Title(strings.ToLower(tokens[i])))
 	}
 	return out.String()
+}
+
+func IsProcWithReturn(proc string) *bool {
+	// a little wonky but we do this to make HasReturn optional in the json
+	ret := false
+	lines := strings.Split(proc, "\n")
+	for i := range lines {
+		ret = returnReg.Match([]byte(lines[i]))
+		if ret {
+			return &ret
+		}
+	}
+
+	return nil
 }
