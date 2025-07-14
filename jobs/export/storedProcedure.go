@@ -29,6 +29,7 @@ WHERE [is_ms_shipped] = 0`
 	[name],  
 	type_name([user_type_id]) as [type],  
 	[max_length] as [length],
+    [parameter_id] as [paramIndex],
     [is_output] as [isOutput]
 FROM sys.parameters
 WHERE object_id = '%[1]s'`
@@ -133,6 +134,7 @@ func updateProcDefs(procDefs []jsonSchema.ProcDef) (err error) {
 		} else {
 			// Stub in default information
 			jsonProcDef.Description = todoMarker
+			jsonProcDef.ClassName = snakeToCamelCase(procDefs[i].Name)
 		}
 
 		// make sure name case is in line with database
@@ -169,6 +171,7 @@ func updateProcDefs(procDefs []jsonSchema.ProcDef) (err error) {
 			jsonProcDef.Params[ix].Name = procDefs[i].Params[ix].Name
 			jsonProcDef.Params[ix].Type = procDefs[i].Params[ix].Type
 			jsonProcDef.Params[ix].Length = procDefs[i].Params[ix].Length
+			jsonProcDef.Params[ix].ParamIndex = procDefs[i].Params[ix].ParamIndex
 			jsonProcDef.Params[ix].IsOutput = procDefs[i].Params[ix].IsOutput
 		}
 
@@ -201,4 +204,13 @@ func getDefaultParam() (col jsonSchema.ParamDef) {
 	col.ParamName = todoMarker
 	col.Description = todoMarker
 	return col
+}
+
+func snakeToCamelCase(dbName string) string {
+	tokens := strings.Split(dbName, "_")
+	out := strings.Builder{}
+	for i := range tokens {
+		out.WriteString(strings.Title(strings.ToLower(tokens[i])))
+	}
+	return out.String()
 }
