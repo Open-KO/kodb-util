@@ -25,10 +25,11 @@ WHERE [is_ms_shipped] = 0`
 
 	// 1. Stored proc name
 	// getProcedureParams returns a list of stored procedure parameter definitions
-	getProcedureParams = `SELECT  
+	getProcedureParams = `SELECT
 	[name],  
-	type_name(user_type_id) as [type],  
-	max_length as [length]
+	type_name([user_type_id]) as [type],  
+	[max_length] as [length],
+    [is_output] as [isOutput]
 FROM sys.parameters
 WHERE object_id = '%[1]s'`
 )
@@ -168,6 +169,7 @@ func updateProcDefs(procDefs []jsonSchema.ProcDef) (err error) {
 			jsonProcDef.Params[ix].Name = procDefs[i].Params[ix].Name
 			jsonProcDef.Params[ix].Type = procDefs[i].Params[ix].Type
 			jsonProcDef.Params[ix].Length = procDefs[i].Params[ix].Length
+			jsonProcDef.Params[ix].IsOutput = procDefs[i].Params[ix].IsOutput
 		}
 
 		// sanity check, column list should be in sync
