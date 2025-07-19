@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	jsonSchema "github.com/Open-KO/kodb-godef"
+	"github.com/Open-KO/kodb-godef/jsonSchema"
 	"kodb-util/artifacts"
 	"kodb-util/config"
 	"kodb-util/mssql"

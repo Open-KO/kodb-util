@@ -15,10 +15,10 @@ github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.1.1/go.mod h
 github.com/AzureAD/microsoft-authentication-library-for-go v0.5.1/go.mod h1:Vt9sXTKwMyGcOxSmLDMnGPgqsUg7m8pe215qMLrDXw4=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.4.2 h1:oygO0locgZJe7PpYPXT5A29ZkwJaPqcva7BVeemZOZs=
 github.com/AzureAD/microsoft-authentication-library-for-go v1.4.2/go.mod h1:wP83P5OoQ5p6ip3ScPr0BAq0BvuPAvacpEuSzyouqAI=
-github.com/Open-KO/OpenKO-gorm v0.1.4 h1:c0vYd/6Ia6ForNG0cMaSTO1hpZSLLhOu93MjGeJX7aQ=
-github.com/Open-KO/OpenKO-gorm v0.1.4/go.mod h1:o4YZdjAutHAmyvPt6Joe/l3V5AK8w6vzjNSDFdxEPi0=
-github.com/Open-KO/kodb-godef v0.1.7 h1:ZuXszc0a2OijAIfzNBC2sH57N1XDRldtbK9aQQtALvg=
-github.com/Open-KO/kodb-godef v0.1.7/go.mod h1:oy/Y6qU76e1H3shcsyyJf5DGyGocZCDCEBPcw5Ptym4=
+github.com/Open-KO/OpenKO-gorm v0.1.5 h1:hXPbjAIQxLlGM/hyFhbHBfcENkuSlAW4L8G9Xh0CPe8=
+github.com/Open-KO/OpenKO-gorm v0.1.5/go.mod h1:o4YZdjAutHAmyvPt6Joe/l3V5AK8w6vzjNSDFdxEPi0=
+github.com/Open-KO/kodb-godef v0.1.9 h1:JnQug4BE6zbqC9gkizB3iCyBnVh/fuQUUPdxpz4oFpc=
+github.com/Open-KO/kodb-godef v0.1.9/go.mod h1:oy/Y6qU76e1H3shcsyyJf5DGyGocZCDCEBPcw5Ptym4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
