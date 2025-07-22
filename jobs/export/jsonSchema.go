@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Open-KO/OpenKO-db/jsonSchema"
-	"github.com/Open-KO/OpenKO-db/jsonSchema/enums/tsql"
+	"github.com/Open-KO/kodb-godef/enums/tsql"
+	"github.com/Open-KO/kodb-godef/jsonSchema"
 	"kodb-util/config"
 	"kodb-util/mssql"
 	"os"
@@ -17,6 +17,8 @@ import (
 const (
 	// jsonSchemaDir is the sub-directory we interact with for exports
 	jsonSchemaDir = "jsonSchema"
+
+	jsonSchemaProcedures = "procedures"
 
 	// getTableNamesSql pulls a list of all our gameDb table names (dbo schema only) from the INFORMATION_SCHEMA
 	getTableNamesSql = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' and TABLE_TYPE = 'BASE TABLE'`

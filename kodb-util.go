@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/Open-KO/OpenKO-db/jsonSchema/enums/dbType"
 	"github.com/Open-KO/OpenKO-gorm/kogen"
+	"github.com/Open-KO/kodb-godef/enums/dbType"
 	"gorm.io/gorm"
 	"kodb-util/arg"
 	"kodb-util/config"
