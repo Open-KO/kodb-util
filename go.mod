@@ -3,7 +3,7 @@ module kodb-util
 go 1.24.4
 
 require (
-	github.com/Open-KO/OpenKO-gorm v0.1.5
+	github.com/Open-KO/OpenKO-gorm v0.1.7
 	github.com/Open-KO/kodb-godef v0.1.10
 	github.com/microsoft/go-mssqldb v1.9.1
 	gopkg.in/yaml.v3 v3.0.1
